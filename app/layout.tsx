@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { Suspense } from 'react'
 import { DemoRoleProvider } from '@/components/demo/demo-role-provider'
 import { DemoShell } from '@/components/demo/demo-shell'
 import { Toaster } from '@/components/ui/sonner'
@@ -40,9 +41,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="font-sans antialiased">
-        <DemoRoleProvider>
-          <DemoShell>{children}</DemoShell>
-        </DemoRoleProvider>
+        <Suspense fallback={<div className="min-h-svh bg-background" />}>
+          <DemoRoleProvider>
+            <DemoShell>{children}</DemoShell>
+          </DemoRoleProvider>
+        </Suspense>
         <Toaster position="top-center" richColors />
         <Analytics />
       </body>
