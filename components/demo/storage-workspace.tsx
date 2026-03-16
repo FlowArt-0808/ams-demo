@@ -22,7 +22,6 @@ import {
 import { toast } from "sonner"
 
 import { AssetStatusBadge } from "@/components/demo/asset-status-badge"
-import { RolePerspectivePanel } from "@/components/demo/role-perspective-panel"
 import { useDemoRole } from "@/components/demo/demo-role-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -61,7 +60,6 @@ import {
   type AssetCategory,
   type Employee,
 } from "@/lib/mock-data"
-import { type DemoRole } from "@/lib/demo-navigation"
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -116,6 +114,50 @@ const categoryStyles: Record<
   },
 }
 
+type StorageCategoryGroupId = "it-equipment" | "furniture" | "sport"
+
+const storageCategoryGroups: Array<{
+  id: StorageCategoryGroupId
+  label: string
+  description: string
+  icon: typeof Laptop
+  iconWrap: string
+  iconClass: string
+  panelClass: string
+  types: AssetCategory[]
+}> = [
+  {
+    id: "it-equipment",
+    label: "IT Equipment",
+    description: "Laptops, monitors, phones, tablets, and related devices.",
+    icon: Laptop,
+    iconWrap: "bg-sky-500/10",
+    iconClass: "text-sky-600",
+    panelClass: "bg-gradient-to-br from-sky-100 via-sky-50 to-white",
+    types: ["Laptop", "Monitor", "Phone", "Tablet", "Other"],
+  },
+  {
+    id: "furniture",
+    label: "Furniture",
+    description: "Desks, chairs, and workplace fixtures tracked in storage.",
+    icon: Warehouse,
+    iconWrap: "bg-amber-500/10",
+    iconClass: "text-amber-600",
+    panelClass: "bg-gradient-to-br from-amber-100 via-amber-50 to-white",
+    types: [],
+  },
+  {
+    id: "sport",
+    label: "Sport",
+    description: "Wellness and activity inventory, ready when demo data expands.",
+    icon: ShieldAlert,
+    iconWrap: "bg-emerald-500/10",
+    iconClass: "text-emerald-600",
+    panelClass: "bg-gradient-to-br from-emerald-100 via-emerald-50 to-white",
+    types: [],
+  },
+]
+
 const ownershipOptions = [
   { id: "all", label: "All ownership" },
   { id: "assigned", label: "Assigned" },
@@ -156,49 +198,11 @@ function getOwnershipLabel(asset: Asset) {
   }
 }
 
-function getStorageRoleContent(role: DemoRole) {
-  if (role === "hr") {
-    return {
-      responsibilities: [
-        "Review ownership, holder context, and condition before distribution or exception follow-up.",
-        "Use asset cards to jump into internal detail or the employee-facing QR page when verifying what a holder should see.",
-      ],
-      visibility: [
-        "Full asset cards with ownership, condition, location, and quick access into the internal record.",
-        "Employee ownership dialog and QR tools for cross-checking what an employee-facing link resolves to.",
-      ],
-    }
-  }
-
-  if (role === "system-admin") {
-    return {
-      responsibilities: [
-        "Exercise both the inventory and HR perspectives from one shared register.",
-        "Validate that asset cards, ownership lookups, and QR handoffs stay consistent across roles.",
-      ],
-      visibility: [
-        "Everything shown to inventory and HR, including archive controls and internal detail access.",
-        "The same shared asset cards with role-dependent actions available in one place.",
-      ],
-    }
-  }
-
-  return {
-    responsibilities: [
-      "Maintain the asset register, keep card details current, and archive demo items from the working list when needed.",
-      "Generate QR links and inspect internal asset records before distribution, recovery, or disposal handoff.",
-    ],
-    visibility: [
-      "All asset cards with ownership, cost, condition, and status metadata for storage operations.",
-      "Archive controls, QR generation, and direct links into internal asset detail pages.",
-    ],
-  }
-}
-
 export function StorageWorkspace() {
-  const { role, setRole } = useDemoRole()
+  const { role } = useDemoRole()
   const [activeTab, setActiveTab] = useState("categories")
   const [searchQuery, setSearchQuery] = useState("")
+  const [selectedStorageCategory, setSelectedStorageCategory] = useState<StorageCategoryGroupId | "all">("all")
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [selectedOwnership, setSelectedOwnership] = useState("all")
   const [selectedCondition, setSelectedCondition] = useState("all")
@@ -264,8 +268,23 @@ export function StorageWorkspace() {
     (asset) => asset.status === "IN_REPAIR" || asset.status === "PENDING_DISPOSAL",
   ).length
   const canArchiveAssets = role === "inventory-head" || role === "system-admin"
-  const storageRoleContent = getStorageRoleContent(role)
-  const categoryCounts = assetCategories.map((category) => {
+  const storageCategoryCounts = storageCategoryGroups.map((group) => {
+    const assets = allAssets.filter((asset) => group.types.includes(asset.category))
+
+    return {
+      ...group,
+      count: assets.length,
+      assigned: assets.filter((asset) => Boolean(asset.assignedTo)).length,
+      flagged: assets.filter(
+        (asset) => asset.status === "IN_REPAIR" || asset.status === "PENDING_DISPOSAL",
+      ).length,
+    }
+  })
+  const selectedStorageGroup =
+    storageCategoryGroups.find((group) => group.id === selectedStorageCategory) ?? null
+  const typeCounts = assetCategories
+    .filter((category) => selectedStorageGroup?.types.includes(category))
+    .map((category) => {
     const assets = allAssets.filter((asset) => asset.category === category)
 
     return {
@@ -323,10 +342,15 @@ export function StorageWorkspace() {
   }, [employeeUrl, selectedAsset?.id])
 
   useEffect(() => {
-    if (selectedCategory === "all" && activeTab === "category-assets") {
+    if (selectedStorageCategory === "all" && (activeTab === "types" || activeTab === "category-assets")) {
       setActiveTab("categories")
+      return
     }
-  }, [activeTab, selectedCategory])
+
+    if (selectedCategory === "all" && activeTab === "category-assets") {
+      setActiveTab("types")
+    }
+  }, [activeTab, selectedCategory, selectedStorageCategory])
 
   const handleArchiveAsset = (asset: Asset) => {
     setArchivedAssetIds((current) => [...current, asset.id])
@@ -377,18 +401,19 @@ export function StorageWorkspace() {
     setActiveTab("category-assets")
   }
 
+  const openStorageCategoryTab = (categoryId: StorageCategoryGroupId) => {
+    setSelectedStorageCategory(categoryId)
+    setSelectedCategory("all")
+    setSearchQuery("")
+    setSelectedOwnership("all")
+    setSelectedCondition("all")
+    setSelectedStatus("all")
+    setSelectedDepartment("all")
+    setActiveTab("types")
+  }
+
   return (
     <div className="space-y-6">
-      <RolePerspectivePanel
-        currentRole={role}
-        onRoleChange={setRole}
-        roles={["inventory-head", "hr"]}
-        title="Storage perspective"
-        description="Switch between the internal storage roles that share this register."
-        responsibilities={storageRoleContent.responsibilities}
-        visibility={storageRoleContent.visibility}
-      />
-
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="rounded-3xl border-0 shadow-sm">
           <CardContent className="flex items-center gap-4 pt-6">
@@ -433,6 +458,11 @@ export function StorageWorkspace() {
           <TabsTrigger value="categories" className="rounded-xl px-4 py-2">
             Categories
           </TabsTrigger>
+          {selectedStorageGroup ? (
+            <TabsTrigger value="types" className="rounded-xl px-4 py-2">
+              {selectedStorageGroup.label} Types
+            </TabsTrigger>
+          ) : null}
           {selectedCategory !== "all" ? (
             <TabsTrigger value="category-assets" className="rounded-xl px-4 py-2">
               {selectedCategory} Assets
@@ -462,14 +492,91 @@ export function StorageWorkspace() {
                   <div>
                     <p className="text-sm font-medium">Browse by category</p>
                     <p className="text-sm text-muted-foreground">
-                      Click a category card to switch into that category tab.
+                      Click a category card to switch into its types tab.
                     </p>
                   </div>
-                  <Badge variant="outline">{categoryCounts.length} categories</Badge>
+                  <Badge variant="outline">{storageCategoryCounts.length} categories</Badge>
                 </div>
 
                 <div className="grid gap-4 xl:grid-cols-3 md:grid-cols-2">
-                  {categoryCounts.map(({ category, count, assigned, flagged }) => {
+                  {storageCategoryCounts.map(({ id, label, description, count, assigned, flagged, icon: Icon, iconClass, iconWrap, panelClass }) => {
+
+                    return (
+                      <Card
+                        key={id}
+                        className={`overflow-hidden rounded-[28px] transition-colors ${
+                          selectedStorageCategory === id
+                            ? "border-primary shadow-sm"
+                            : "border-dashed shadow-none hover:border-primary/40"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => openStorageCategoryTab(id)}
+                          className="block w-full text-left"
+                        >
+                          <div className={`relative aspect-[16/10] border-b border-dashed ${panelClass}`}>
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.9),transparent_45%)]" />
+                            <div className="absolute top-4 right-4">
+                              <Badge variant="secondary">{count} assets</Badge>
+                            </div>
+                            <div className="absolute inset-x-4 bottom-4 flex items-end justify-between gap-3">
+                              <div className="space-y-1">
+                                <Badge variant="outline" className="bg-background/85">
+                                  Category view
+                                </Badge>
+                                <p className="text-xl font-semibold">{label}</p>
+                              </div>
+                              <div
+                                className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-background/90 shadow-sm ${iconWrap}`}
+                              >
+                                <Icon className={`h-6 w-6 ${iconClass}`} />
+                              </div>
+                            </div>
+                          </div>
+
+                          <CardContent className="space-y-4 pt-6">
+                            <p className="text-sm text-muted-foreground">{description}</p>
+                            <div className="flex flex-wrap gap-2">
+                              <Badge variant="outline">{assigned} assigned</Badge>
+                              <Badge variant="outline">{count - assigned} in storage</Badge>
+                              <Badge variant="outline">{flagged} flagged</Badge>
+                            </div>
+                          </CardContent>
+                        </button>
+                      </Card>
+                    )
+                  })}
+                </div>
+              </div>
+
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="types" className="space-y-4">
+          <Card className="rounded-[28px] border-0 shadow-sm">
+            <CardHeader>
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <CardTitle>{selectedStorageGroup?.label ?? "Category"} types</CardTitle>
+                  <CardDescription>
+                    Choose a type inside this storage category to open the matching asset cards.
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  className="rounded-xl"
+                  onClick={() => setActiveTab("categories")}
+                >
+                  Back to categories
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {typeCounts.length > 0 ? (
+                <div className="grid gap-4 xl:grid-cols-3 md:grid-cols-2">
+                  {typeCounts.map(({ category, count, assigned, flagged }) => {
                     const style = categoryStyles[category]
                     const Icon = style.icon
 
@@ -495,7 +602,7 @@ export function StorageWorkspace() {
                             <div className="absolute inset-x-4 bottom-4 flex items-end justify-between gap-3">
                               <div className="space-y-1">
                                 <Badge variant="outline" className="bg-background/85">
-                                  Category view
+                                  Type view
                                 </Badge>
                                 <p className="text-xl font-semibold">{category}</p>
                               </div>
@@ -508,11 +615,9 @@ export function StorageWorkspace() {
                           </div>
 
                           <CardContent className="space-y-4 pt-6">
-                            <div className="space-y-1">
-                              <p className="text-sm text-muted-foreground">
-                                Open the {category.toLowerCase()} tab and browse those asset cards.
-                              </p>
-                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              Open the {category.toLowerCase()} asset tab and browse that type.
+                            </p>
                             <div className="flex flex-wrap gap-2">
                               <Badge variant="outline">{assigned} assigned</Badge>
                               <Badge variant="outline">{count - assigned} in storage</Badge>
@@ -524,8 +629,16 @@ export function StorageWorkspace() {
                     )
                   })}
                 </div>
-              </div>
-
+              ) : (
+                <div className="rounded-3xl border border-dashed bg-muted/20 px-4 py-12 text-center">
+                  <div className="space-y-2">
+                    <p className="font-medium">No types are seeded for this category yet.</p>
+                    <p className="text-sm text-muted-foreground">
+                      This category structure is ready, but the current demo data is still focused on IT equipment.
+                    </p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -537,15 +650,15 @@ export function StorageWorkspace() {
                 <div>
                   <CardTitle>{selectedCategory} asset cards</CardTitle>
                   <CardDescription>
-                    Search and filter within the selected category, then open the matching asset cards.
+                    Search and filter within the selected type, then open the matching asset cards.
                   </CardDescription>
                 </div>
                 <Button
                   variant="outline"
                   className="rounded-xl"
-                  onClick={() => setActiveTab("categories")}
+                  onClick={() => setActiveTab("types")}
                 >
-                  Back to categories
+                  Back to types
                 </Button>
               </div>
             </CardHeader>
@@ -568,7 +681,7 @@ export function StorageWorkspace() {
                   <div>
                     <p className="text-sm font-medium">Filters</p>
                     <p className="text-sm text-muted-foreground">
-                      Use filters separately from search to narrow the category view.
+                      Use filters separately from search to narrow the selected type.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -667,8 +780,11 @@ export function StorageWorkspace() {
                     </div>
 
                     <div className="flex flex-wrap gap-2 lg:justify-end">
+                      {selectedStorageGroup ? (
+                        <Badge variant="secondary">Category: {selectedStorageGroup.label}</Badge>
+                      ) : null}
                       {selectedCategory !== "all" ? (
-                        <Badge variant="secondary">Category: {selectedCategory}</Badge>
+                        <Badge variant="secondary">Type: {selectedCategory}</Badge>
                       ) : null}
                       {selectedOwnership !== "all" ? (
                         <Badge variant="secondary">Ownership: {ownershipOptions.find((option) => option.id === selectedOwnership)?.label}</Badge>
