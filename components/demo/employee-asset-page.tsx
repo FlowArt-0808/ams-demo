@@ -10,7 +10,6 @@ import {
   Package2,
   ShieldCheck,
   UserRound,
-  Users,
 } from "lucide-react"
 
 import { AssetStatusBadge } from "@/components/demo/asset-status-badge"
@@ -22,7 +21,6 @@ import { Input } from "@/components/ui/input"
 import {
   getAssetHistory,
   getAssetsForEmployee,
-  mockEmployees,
   type Asset,
   type Employee,
 } from "@/lib/mock-data"
@@ -61,17 +59,17 @@ export function EmployeeAssetPage({
   const [errorMessage, setErrorMessage] = useState("")
   const [assignedToSelf, setAssignedToSelf] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(true)
+  const [isAssetsOpen, setIsAssetsOpen] = useState(false)
   const historyEvents = getAssetHistory(asset.id)
-  const otherEmployeeOwnership = mockEmployees
-    .filter((employee) => employee.id !== asset.assignedTo)
-    .map((employee) => ({
-      employee,
-      assets: getAssetsForEmployee(employee.id),
-    }))
 
   const holderName = assignedToSelf ? "You" : owner?.name ?? "In storage"
   const holderDepartment = assignedToSelf ? "Pending self-assignment" : owner?.department ?? "Storage"
   const holderContact = assignedToSelf ? "Awaiting internal approval" : owner?.email ?? "Asset Operations"
+  const employeeAssets = assignedToSelf
+    ? [asset]
+    : owner
+      ? getAssetsForEmployee(owner.id)
+      : []
 
   const handleUnlock = () => {
     if (accessPhrase.trim().length > 0) {
@@ -248,85 +246,79 @@ export function EmployeeAssetPage({
                 </CollapsibleContent>
               </Collapsible>
 
-              <div className="rounded-3xl border border-dashed bg-muted/20 p-5">
-                <div className="mb-5 flex items-start gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-500/10">
-                    <Users className="h-5 w-5 text-cyan-700" />
-                  </div>
-                  <div>
-                    <p className="font-medium">Other employee ownership</p>
-                    <p className="text-sm text-muted-foreground">
-                      After scanning, this page also shows who else currently holds company assets
-                      and the main details tied to each person.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 xl:grid-cols-2">
-                  {otherEmployeeOwnership.map(({ employee, assets }) => (
-                    <div key={employee.id} className="rounded-3xl border bg-background p-5 shadow-sm">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-lg font-semibold">{employee.name}</p>
-                          <p className="text-sm text-muted-foreground">{employee.title}</p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Badge variant="outline">{employee.department}</Badge>
-                          <Badge variant="secondary">{assets.length} assets</Badge>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-2xl bg-muted/40 p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                            Contact
-                          </p>
-                          <p className="mt-2 text-sm font-medium">{employee.email}</p>
-                          <p className="mt-1 text-sm text-muted-foreground">{employee.phone}</p>
-                        </div>
-                        <div className="rounded-2xl bg-muted/40 p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                            Branch
-                          </p>
-                          <p className="mt-2 text-sm font-medium">{employee.branch}</p>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            Current assignment footprint
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 space-y-3">
-                        {assets.map((ownedAsset) => (
-                          <div
-                            key={ownedAsset.id}
-                            className="rounded-2xl border border-dashed bg-muted/20 p-4"
-                          >
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div>
-                                <p className="font-medium">{ownedAsset.name}</p>
-                                <p className="text-sm text-muted-foreground">{ownedAsset.id}</p>
-                              </div>
-                              <AssetStatusBadge status={ownedAsset.status} />
-                            </div>
-
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              <Badge variant="outline">{ownedAsset.category}</Badge>
-                              <Badge variant="outline" className={conditionClasses[ownedAsset.condition]}>
-                                {ownedAsset.condition}
-                              </Badge>
-                              <Badge variant="outline">{ownedAsset.location}</Badge>
-                            </div>
-
-                            <p className="mt-3 text-sm text-muted-foreground">
-                              {ownedAsset.description}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
+              <Collapsible
+                open={isAssetsOpen}
+                onOpenChange={setIsAssetsOpen}
+                className="rounded-3xl border border-dashed bg-muted/20 p-5"
+              >
+                <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-500/10">
+                      <Package2 className="h-5 w-5 text-cyan-700" />
                     </div>
-                  ))}
+                    <div>
+                      <p className="font-medium">Your assets</p>
+                      <p className="text-sm text-muted-foreground">
+                        Open this list to see all assets currently assigned under your name.
+                      </p>
+                    </div>
+                  </div>
+
+                  <CollapsibleTrigger asChild>
+                    <Button variant="outline" className="rounded-xl">
+                      {isAssetsOpen ? "Hide your assets" : "Show your assets"}
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          isAssetsOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </Button>
+                  </CollapsibleTrigger>
                 </div>
-              </div>
+
+                <CollapsibleContent className="data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down overflow-hidden">
+                  {owner || assignedToSelf ? (
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary">{employeeAssets.length} assets</Badge>
+                        <Badge variant="outline">{holderName}</Badge>
+                        <Badge variant="outline">{holderDepartment}</Badge>
+                      </div>
+
+                      {employeeAssets.map((ownedAsset) => (
+                        <div
+                          key={ownedAsset.id}
+                          className="rounded-2xl border border-dashed bg-background p-4 shadow-sm"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="font-medium">{ownedAsset.name}</p>
+                              <p className="text-sm text-muted-foreground">{ownedAsset.id}</p>
+                            </div>
+                            <AssetStatusBadge status={ownedAsset.status} />
+                          </div>
+
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <Badge variant="outline">{ownedAsset.category}</Badge>
+                            <Badge variant="outline" className={conditionClasses[ownedAsset.condition]}>
+                              {ownedAsset.condition}
+                            </Badge>
+                            <Badge variant="outline">{ownedAsset.location}</Badge>
+                          </div>
+
+                          <p className="mt-3 text-sm text-muted-foreground">
+                            {ownedAsset.description}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed bg-background p-4 text-sm text-muted-foreground">
+                      No assets are assigned under this employee yet.
+                    </div>
+                  )}
+                </CollapsibleContent>
+              </Collapsible>
 
               <div className="rounded-3xl border border-dashed bg-muted/20 p-5">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

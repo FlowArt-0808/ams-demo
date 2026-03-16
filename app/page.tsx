@@ -607,8 +607,8 @@ function WorkflowOverview({
                   3. Result
                 </p>
                 <p className="mt-2 text-sm font-medium">
-                  Employee sees ownership, condition, history timeline, action buttons, and other
-                  employees with their assigned asset details.
+                  Employee sees ownership, condition, collapsible history, action buttons, and a
+                  collapsible list of their assigned assets.
                 </p>
               </div>
             </div>
@@ -620,7 +620,7 @@ function WorkflowOverview({
                     <Badge variant="outline">Employee Asset Page</Badge>
                     <Badge variant="outline">History Timeline</Badge>
                     <Badge variant="outline">Assign Asset To Myself</Badge>
-                    <Badge variant="outline">Employee Ownership Directory</Badge>
+                    <Badge variant="outline">Your Assets</Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">
                     This is the screen the employee should land on after scanning. It replaces the
