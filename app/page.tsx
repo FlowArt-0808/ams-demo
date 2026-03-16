@@ -22,6 +22,7 @@ import {
 } from "lucide-react"
 
 import { StorageWorkspace } from "@/components/demo/storage-workspace"
+import { LifecycleExceptionsWorkspace } from "@/components/demo/lifecycle-exceptions-workspace"
 import { useDemoRole } from "@/components/demo/demo-role-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -46,6 +47,8 @@ const menuIcons: Record<DemoMenuId, typeof House> = {
   storage: Warehouse,
   distribution: Package,
   "distribution-workflow": Package,
+  "issues-workflow": AlertTriangle,
+  "dispose-workflow": Trash2,
   "missing-broken": AlertTriangle,
   dispose: Trash2,
   settings: Settings,
@@ -57,8 +60,13 @@ const screenIcons: Record<DemoScreenId, typeof QrCode> = {
   "auditor-scan": QrCode,
   "employee-assets": UserCheck,
   "hr-distribution": Package,
+  "it-distribution": Settings,
   "employee-request": Package,
   "employee-acknowledge": FileSignature,
+  "issue-queue": AlertTriangle,
+  "it-issue-triage": Settings,
+  "dispose-queue": Trash2,
+  "it-dispose": Settings,
 }
 
 const screenStyles: Record<
@@ -84,6 +92,10 @@ const screenStyles: Record<
     iconWrap: "bg-violet-500/10",
     icon: "text-violet-600",
   },
+  "it-distribution": {
+    iconWrap: "bg-slate-500/10",
+    icon: "text-slate-600",
+  },
   "employee-request": {
     iconWrap: "bg-cyan-500/10",
     icon: "text-cyan-600",
@@ -91,6 +103,22 @@ const screenStyles: Record<
   "employee-acknowledge": {
     iconWrap: "bg-rose-500/10",
     icon: "text-rose-600",
+  },
+  "issue-queue": {
+    iconWrap: "bg-rose-500/10",
+    icon: "text-rose-600",
+  },
+  "it-issue-triage": {
+    iconWrap: "bg-slate-500/10",
+    icon: "text-slate-600",
+  },
+  "dispose-queue": {
+    iconWrap: "bg-slate-500/10",
+    icon: "text-slate-600",
+  },
+  "it-dispose": {
+    iconWrap: "bg-zinc-500/10",
+    icon: "text-zinc-700",
   },
 }
 
@@ -124,6 +152,14 @@ const menuStyles: Record<
   "distribution-workflow": {
     iconWrap: "bg-violet-500/10",
     icon: "text-violet-600",
+  },
+  "issues-workflow": {
+    iconWrap: "bg-rose-500/10",
+    icon: "text-rose-600",
+  },
+  "dispose-workflow": {
+    iconWrap: "bg-slate-500/10",
+    icon: "text-slate-600",
   },
   "missing-broken": {
     iconWrap: "bg-rose-500/10",
@@ -188,8 +224,10 @@ const pendingTasks = [
 ]
 
 const workflowParticipants: Record<DemoWorkflow, string[]> = {
-  qr: ["Inventory Head", "Employee"],
-  distribution: ["HR", "Employee"],
+  qr: ["HR", "Inventory Head", "Employee"],
+  distribution: ["HR", "IT Admin", "Employee"],
+  issues: ["HR", "Inventory Head", "IT Admin"],
+  dispose: ["HR", "Finance", "IT Admin"],
 }
 
 function DashboardOverview() {
@@ -419,22 +457,16 @@ function DashboardOverview() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="overflow-hidden rounded-2xl border">
-              <div className="grid grid-cols-[1.2fr_2fr_1.2fr_1.1fr] gap-3 border-b bg-muted/40 px-4 py-3 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                <span>Asset Tag</span>
-                <span>Name</span>
-                <span>Category</span>
-                <span>Status</span>
-              </div>
+            <div className="grid gap-3 md:grid-cols-2">
               {recentAssets.map((asset) => (
-                <div
-                  key={asset.id}
-                  className="grid grid-cols-[1.2fr_2fr_1.2fr_1.1fr] gap-3 border-b px-4 py-3 text-sm last:border-b-0"
-                >
-                  <span className="font-medium">{asset.id}</span>
-                  <span className="truncate">{asset.name}</span>
-                  <span>{asset.category}</span>
-                  <span>{asset.verified ? "Assigned" : "Available"}</span>
+                <div key={asset.id} className="rounded-2xl border border-dashed bg-muted/20 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">{asset.category}</Badge>
+                    <Badge variant="secondary">{asset.verified ? "Assigned" : "Available"}</Badge>
+                  </div>
+                  <p className="mt-3 font-medium">{asset.name}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{asset.id}</p>
+                  <p className="mt-3 text-sm text-muted-foreground">{asset.location}</p>
                 </div>
               ))}
             </div>
@@ -656,6 +688,10 @@ export default function HomePage() {
   const activeWorkflow =
     activeMenuId === "distribution-workflow"
       ? "distribution"
+      : activeMenuId === "issues-workflow"
+        ? "issues"
+      : activeMenuId === "dispose-workflow"
+        ? "dispose"
       : activeMenuId === "qr"
         ? "qr"
         : null
@@ -762,6 +798,12 @@ export default function HomePage() {
           )
         ) : activeMenuId === "storage" ? (
           <StorageWorkspace />
+        ) : activeMenuId === "missing-broken" || activeMenuId === "dispose" ? (
+          <LifecycleExceptionsWorkspace
+            mode={activeMenuId === "missing-broken" ? "issues" : "dispose"}
+            role={role}
+            roleLabel={activeRole.label}
+          />
         ) : (
           <Card className="max-w-2xl border-dashed">
             <CardContent className="py-10">

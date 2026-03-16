@@ -2,10 +2,11 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useDemoRole } from "@/components/demo/demo-role-provider"
+import { RolePerspectivePanel } from "@/components/demo/role-perspective-panel"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
 import {
   Dialog,
   DialogContent,
@@ -60,6 +61,7 @@ import {
   type AssetAssignment,
   type Asset,
 } from "@/lib/mock-data"
+import { type DemoRole } from "@/lib/demo-navigation"
 
 const categoryIcons = {
   Laptop: Laptop,
@@ -84,7 +86,47 @@ const assignmentStatusConfig = {
 
 type TabType = "assign" | "requests" | "history"
 
+function getDistributionRoleContent(role: DemoRole) {
+  if (role === "it-admin") {
+    return {
+      responsibilities: [
+        "Review which devices are about to go out, verify readiness, and track pending acknowledgments after handoff.",
+        "Use the shared cards for context, but leave request approvals and assignment creation to HR.",
+      ],
+      visibility: [
+        "Available asset cards, pending acknowledgment cards, and assignment history so you can follow the handoff end to end.",
+        "Employee requests stay visible for context, but they are read-only from the IT perspective.",
+      ],
+    }
+  }
+
+  if (role === "system-admin") {
+    return {
+      responsibilities: [
+        "Validate both HR and IT paths from one shared distribution workspace.",
+        "Exercise request review, assignment, and handoff tracking without leaving the screen.",
+      ],
+      visibility: [
+        "Everything shown to HR and IT, including request actions, assign actions, and post-assignment follow-up cards.",
+        "The same distribution tabs with role-dependent controls exposed in one place.",
+      ],
+    }
+  }
+
+  return {
+    responsibilities: [
+      "Review employee requests, assign available assets, and keep the acknowledgment queue moving.",
+      "Use the available-asset cards to choose inventory and the history cards to confirm completed handoffs.",
+    ],
+    visibility: [
+      "Actionable request cards, available asset cards with assign buttons, and pending acknowledgment follow-up cards.",
+      "Assignment history so HR can verify what was already issued and acknowledged.",
+    ],
+  }
+}
+
 export default function HRDistributionPage() {
+  const { role, setRole } = useDemoRole()
   const [activeTab, setActiveTab] = useState<TabType>("assign")
   const [requests, setRequests] = useState<AssetRequest[]>(mockAssetRequests)
   const [assignments, setAssignments] = useState<AssetAssignment[]>(mockAssetAssignments)
@@ -99,6 +141,9 @@ export default function HRDistributionPage() {
   // Request review dialog state
   const [reviewingRequest, setReviewingRequest] = useState<AssetRequest | null>(null)
   const [rejectionReason, setRejectionReason] = useState("")
+  const canAssignAssets = role === "hr" || role === "system-admin"
+  const canReviewRequests = role === "hr" || role === "system-admin"
+  const distributionRoleContent = getDistributionRoleContent(role)
 
   // Stats
   const pendingRequests = requests.filter(r => r.status === "Pending").length
@@ -206,17 +251,35 @@ export default function HRDistributionPage() {
             </div>
             <div>
               <h1 className="font-semibold text-sm">Distribution Dashboard</h1>
-              <p className="text-xs text-muted-foreground">HR Manager View</p>
+              <p className="text-xs text-muted-foreground">Shared distribution tab with role-specific controls</p>
             </div>
           </div>
-          <Button className="ml-auto gap-2" onClick={() => setIsAssignDialogOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Assign Asset
-          </Button>
+          {canAssignAssets ? (
+            <Button className="ml-auto gap-2" onClick={() => setIsAssignDialogOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Assign Asset
+            </Button>
+          ) : (
+            <Badge variant="outline" className="ml-auto">
+              IT view
+            </Badge>
+          )}
         </div>
       </header>
 
       <main className="container px-4 py-6">
+        <div className="mb-6">
+          <RolePerspectivePanel
+            currentRole={role}
+            onRoleChange={setRole}
+            roles={["hr", "it-admin"]}
+            title="Distribution perspective"
+            description="Switch between the roles that share this tab."
+            responsibilities={distributionRoleContent.responsibilities}
+            visibility={distributionRoleContent.visibility}
+          />
+        </div>
+
         {/* Stats Cards */}
         <div className="grid gap-4 md:grid-cols-4 mb-6">
           <Card>
@@ -342,15 +405,19 @@ export default function HRDistributionPage() {
                               <span className="text-xs text-muted-foreground">{asset.location}</span>
                             </div>
                           </div>
-                          <Button 
-                            size="sm"
-                            onClick={() => {
-                              setSelectedAsset(asset.id)
-                              setIsAssignDialogOpen(true)
-                            }}
-                          >
-                            Assign
-                          </Button>
+                          {canAssignAssets ? (
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setSelectedAsset(asset.id)
+                                setIsAssignDialogOpen(true)
+                              }}
+                            >
+                              Assign
+                            </Button>
+                          ) : (
+                            <Badge variant="outline">IT can review only</Badge>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -440,7 +507,7 @@ export default function HRDistributionPage() {
                             Requested: {new Date(request.requestedAt).toLocaleDateString()}
                           </p>
                         </div>
-                        {request.status === "Pending" && (
+                        {request.status === "Pending" && canReviewRequests ? (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon">
@@ -453,7 +520,7 @@ export default function HRDistributionPage() {
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
-                        )}
+                        ) : request.status === "Pending" ? <Badge variant="outline">View only</Badge> : null}
                       </div>
                     </CardContent>
                   </Card>

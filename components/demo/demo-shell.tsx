@@ -66,6 +66,8 @@ const menuIcons: Record<DemoMenuId, typeof House> = {
   storage: Warehouse,
   distribution: Package,
   "distribution-workflow": Package,
+  "issues-workflow": AlertTriangle,
+  "dispose-workflow": Trash2,
   "missing-broken": AlertTriangle,
   dispose: Trash2,
   settings: Settings,
@@ -73,11 +75,19 @@ const menuIcons: Record<DemoMenuId, typeof House> = {
 }
 
 const workflowRoleText: Partial<Record<DemoMenuId, string>> = {
-  qr: "Roles: Inventory Head, Employee",
-  "distribution-workflow": "Roles: HR, Employee",
+  qr: "Roles: HR, Inventory Head, Employee",
+  "distribution-workflow": "Roles: HR, IT Admin, Employee",
+  "issues-workflow": "Roles: HR, Inventory Head, IT Admin",
+  "dispose-workflow": "Roles: HR, Finance, IT Admin",
 }
 
-const highlightedMenuIds = new Set<DemoMenuId>(["storage", "qr", "distribution-workflow"])
+const highlightedMenuIds = new Set<DemoMenuId>([
+  "storage",
+  "qr",
+  "distribution-workflow",
+  "issues-workflow",
+  "dispose-workflow",
+])
 
 function getHighlightedMenuClass(menuId: DemoMenuId) {
   if (!highlightedMenuIds.has(menuId)) {

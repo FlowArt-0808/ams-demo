@@ -1,7 +1,15 @@
 import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowLeft, Link2, Package2, ShieldCheck, UserRound, Warehouse } from "lucide-react"
+import {
+  ArrowLeft,
+  Clock3,
+  Link2,
+  Package2,
+  ShieldCheck,
+  UserRound,
+  Warehouse,
+} from "lucide-react"
 
 import { AssetStatusBadge } from "@/components/demo/asset-status-badge"
 import { Badge } from "@/components/ui/badge"
@@ -13,7 +21,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { getAssetById, getAssignedAssetCount, getEmployeeById } from "@/lib/mock-data"
+import {
+  getAssetById,
+  getAssetHistory,
+  getAssignedAssetCount,
+  getEmployeeById,
+} from "@/lib/mock-data"
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -49,6 +62,7 @@ export default async function StorageAssetDetailPage({
   }
 
   const owner = getEmployeeById(asset.assignedTo)
+  const historyEvents = getAssetHistory(asset.id)
 
   return (
     <div className="min-h-svh bg-background">
@@ -215,16 +229,20 @@ export default async function StorageAssetDetailPage({
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="rounded-2xl border border-dashed bg-muted/30 p-4 text-sm">
+                <Link
+                  href={`/employee/assets/${asset.id}`}
+                  className="block rounded-2xl border border-dashed bg-muted/30 p-4 text-sm transition-colors hover:border-primary/40 hover:bg-muted/50"
+                >
                   <p className="font-medium">Employee QR page</p>
                   <p className="mt-1 text-muted-foreground">
-                    Shows a limited asset summary for employees and scanners.
+                    Click to open the limited employee-facing page that the QR sticker resolves to.
                   </p>
-                </div>
+                </Link>
                 <div className="rounded-2xl border border-dashed bg-muted/30 p-4 text-sm">
-                  <p className="font-medium">Internal asset record</p>
+                  <p className="font-medium">Internal asset record (this page)</p>
                   <p className="mt-1 text-muted-foreground">
-                    Includes financial value, ownership context, and operational status.
+                    This is the internal operations view for finance, HR, and admins. It combines asset details,
+                    ownership context, and the full history timeline in one place.
                   </p>
                 </div>
                 <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-500/10 p-4 text-sm text-amber-900">
@@ -235,6 +253,76 @@ export default async function StorageAssetDetailPage({
             </Card>
           </div>
         </div>
+
+        <Card className="rounded-[28px] border-0 shadow-sm">
+          <details open className="group">
+            <summary className="list-none cursor-pointer">
+              <CardHeader>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/10">
+                      <Clock3 className="h-5 w-5 text-violet-600" />
+                    </div>
+                    <div>
+                      <CardTitle>Asset history</CardTitle>
+                      <CardDescription>
+                        Full lifecycle timeline for this asset, including ownership and condition changes.
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="group-open:hidden">
+                    Expand
+                  </Badge>
+                  <Badge variant="secondary" className="hidden group-open:inline-flex">
+                    Collapse
+                  </Badge>
+                </div>
+              </CardHeader>
+            </summary>
+            <CardContent>
+              <div className="relative pl-8">
+                <div className="absolute top-2 bottom-2 left-[11px] w-px bg-border" />
+                <div className="space-y-5">
+                  {historyEvents.map((event) => (
+                    <div key={event.id} className="relative">
+                      <div className="absolute top-6 -left-[26px] flex h-6 w-6 items-center justify-center rounded-full border-4 border-background bg-violet-500 shadow-sm" />
+                      <div className="rounded-2xl border bg-background p-4 shadow-sm">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div className="space-y-1">
+                            <p className="text-sm font-semibold">{event.title}</p>
+                            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                              {new Date(event.date).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className={conditionClasses[event.condition]}>
+                            Condition: {event.condition}
+                          </Badge>
+                        </div>
+
+                        <p className="mt-3 text-sm text-muted-foreground">{event.description}</p>
+
+                        <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+                          <div className="rounded-xl bg-muted/40 px-3 py-3">
+                            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                              Owner
+                            </p>
+                            <p className="mt-1 font-medium">{event.ownerLabel}</p>
+                          </div>
+                          <div className="rounded-xl bg-muted/40 px-3 py-3">
+                            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                              Location
+                            </p>
+                            <p className="mt-1 font-medium">{event.location}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </details>
+        </Card>
       </main>
     </div>
   )

@@ -7,12 +7,13 @@ export type DemoRole =
   | "it-admin"
   | "system-admin"
 
-export type DemoWorkflow = "qr" | "distribution"
+export type DemoWorkflow = "qr" | "distribution" | "issues" | "dispose"
 
 const storageDetailRoles: DemoRole[] = [
   "inventory-head",
   "hr",
   "finance",
+  "it-admin",
   "system-admin",
 ]
 
@@ -23,6 +24,8 @@ export type DemoMenuId =
   | "storage"
   | "distribution"
   | "distribution-workflow"
+  | "issues-workflow"
+  | "dispose-workflow"
   | "missing-broken"
   | "dispose"
   | "settings"
@@ -35,8 +38,13 @@ export type DemoScreenId =
   | "auditor-scan"
   | "employee-assets"
   | "hr-distribution"
+  | "it-distribution"
   | "employee-request"
   | "employee-acknowledge"
+  | "issue-queue"
+  | "it-issue-triage"
+  | "dispose-queue"
+  | "it-dispose"
 
 export interface DemoRoleOption {
   id: DemoRole
@@ -92,17 +100,17 @@ export const demoRoles: DemoRoleOption[] = [
   {
     id: "hr",
     label: "HR",
-    description: "Works with storage visibility and distribution to employees.",
+    description: "Owns census, distribution coordination, and exception handling.",
   },
   {
     id: "finance",
     label: "Finance",
-    description: "Focuses on receiving confirmation and finance-side checkpoints.",
+    description: "Focuses on receiving confirmation, write-offs, and finance checkpoints.",
   },
   {
     id: "it-admin",
     label: "IT Admin",
-    description: "Reserved for later role definition in this demo.",
+    description: "Handles repairs, device readiness, and data wipe certification.",
   },
   {
     id: "system-admin",
@@ -158,7 +166,7 @@ export const demoMenus: DemoMenuConfig[] = [
       "Assign assets, handle employee requests, and manage acknowledgment flow.",
     href: "/hr/distribution",
     section: "main",
-    roles: ["hr", "system-admin"],
+    roles: ["hr", "it-admin", "system-admin"],
   },
   {
     id: "missing-broken",
@@ -174,7 +182,7 @@ export const demoMenus: DemoMenuConfig[] = [
     description: "Manage asset retirement and disposal decisions.",
     href: "/?view=dispose",
     section: "main",
-    roles: ["hr", "finance", "system-admin"],
+    roles: ["hr", "finance", "it-admin", "system-admin"],
   },
   {
     id: "settings",
@@ -201,19 +209,35 @@ export const demoMenus: DemoMenuConfig[] = [
     section: "workflow",
     roles: demoRoles.map((role) => role.id),
   },
+  {
+    id: "issues-workflow",
+    label: "Missing/Broken Workflow",
+    description: "Role-based walkthrough for incident triage and asset recovery work.",
+    href: "/?workflow=issues",
+    section: "workflow",
+    roles: demoRoles.map((role) => role.id),
+  },
+  {
+    id: "dispose-workflow",
+    label: "Dispose Workflow",
+    description: "Role-based walkthrough for write-off review and disposal execution.",
+    href: "/?workflow=dispose",
+    section: "workflow",
+    roles: demoRoles.map((role) => role.id),
+  },
 ]
 
 export const demoScreens: DemoScreenConfig[] = [
   {
     id: "hr-census",
     workflow: "qr",
-    ownerRole: "inventory-head",
+    ownerRole: "hr",
     label: "Census Management",
     href: "/hr/census",
     description:
       "Create census periods, scope the audit, and track verification progress.",
     badge: "Step 1",
-    roles: ["inventory-head", "system-admin"],
+    roles: ["hr", "inventory-head", "system-admin"],
   },
   {
     id: "auditor-scan",
@@ -246,7 +270,18 @@ export const demoScreens: DemoScreenConfig[] = [
     description:
       "Assign assets, review requests, and track outbound assignment activity.",
     badge: "HR",
-    roles: ["hr", "system-admin"],
+    roles: ["hr", "it-admin", "system-admin"],
+  },
+  {
+    id: "it-distribution",
+    workflow: "distribution",
+    ownerRole: "it-admin",
+    label: "IT Readiness",
+    href: "/hr/distribution",
+    description:
+      "Review pending acknowledgments, coordinate device prep, and follow the outbound handoff.",
+    badge: "IT",
+    roles: ["it-admin", "system-admin"],
   },
   {
     id: "employee-request",
@@ -267,6 +302,50 @@ export const demoScreens: DemoScreenConfig[] = [
     description: "Acknowledge receipt of an assigned asset electronically.",
     badge: "Employee",
     roles: ["employee", "system-admin"],
+  },
+  {
+    id: "issue-queue",
+    workflow: "issues",
+    ownerRole: "hr",
+    label: "Missing/Broken Queue",
+    href: "/?view=missing-broken",
+    description:
+      "Report incidents, monitor recovery work, and route damaged devices into technical review.",
+    badge: "Step 1",
+    roles: ["hr", "inventory-head", "it-admin", "system-admin"],
+  },
+  {
+    id: "it-issue-triage",
+    workflow: "issues",
+    ownerRole: "it-admin",
+    label: "Technical Triage",
+    href: "/?view=missing-broken",
+    description:
+      "Assess damaged assets, decide repair versus retirement, and push technical cases forward.",
+    badge: "Step 2",
+    roles: ["it-admin", "system-admin"],
+  },
+  {
+    id: "dispose-queue",
+    workflow: "dispose",
+    ownerRole: "finance",
+    label: "Dispose Queue",
+    href: "/?view=dispose",
+    description:
+      "Review write-offs, confirm wipe evidence, and complete the disposal archive flow.",
+    badge: "Step 1",
+    roles: ["finance", "hr", "it-admin", "system-admin"],
+  },
+  {
+    id: "it-dispose",
+    workflow: "dispose",
+    ownerRole: "it-admin",
+    label: "Wipe & Finalize",
+    href: "/?view=dispose",
+    description:
+      "Upload the wipe certificate, complete the operational checklist, and finish the disposal.",
+    badge: "IT",
+    roles: ["it-admin", "system-admin"],
   },
 ]
 
@@ -362,6 +441,14 @@ export function getActiveMenuId(
   if (pathname === "/") {
     if (searchParams.get("workflow") === "distribution") {
       return "distribution-workflow"
+    }
+
+    if (searchParams.get("workflow") === "issues") {
+      return "issues-workflow"
+    }
+
+    if (searchParams.get("workflow") === "dispose") {
+      return "dispose-workflow"
     }
 
     if (searchParams.get("workflow") === "qr") {
