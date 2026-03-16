@@ -82,6 +82,7 @@ const workflowRoleText: Partial<Record<DemoMenuId, string>> = {
 }
 
 const highlightedMenuIds = new Set<DemoMenuId>([
+  "order",
   "storage",
   "qr",
   "distribution-workflow",

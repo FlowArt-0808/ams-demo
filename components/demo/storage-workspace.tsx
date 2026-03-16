@@ -5,6 +5,10 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 import QRCode from "qrcode"
 import {
+  AlertTriangle,
+  CheckCircle2,
+  ClipboardList,
+  Clock,
   Download,
   Laptop,
   Link2,
@@ -56,8 +60,10 @@ import {
   getAllAssets,
   getAssignedAssetCount,
   getEmployeeById,
+  mockCensuses,
   type Asset,
   type AssetCategory,
+  type Census,
   type Employee,
 } from "@/lib/mock-data"
 
@@ -171,6 +177,56 @@ const conditionOptions = [
   { id: "Damaged", label: "Damaged" },
 ] as const
 
+const storageHistoricalCensuses: Census[] = [
+  {
+    id: "CEN-2025-002",
+    name: "Q3 2025 Storage Spot Census",
+    scope: "Department",
+    scopeValue: "Storage",
+    startDate: "2025-09-03",
+    deadline: "2025-09-12",
+    status: "Completed",
+    totalAssets: 64,
+    verifiedAssets: 64,
+    createdAt: "2025-08-29T09:15:00Z",
+  },
+  {
+    id: "CEN-2025-001",
+    name: "Q2 2025 IT Equipment Census",
+    scope: "Asset Category",
+    scopeValue: "Laptop",
+    startDate: "2025-06-10",
+    deadline: "2025-06-24",
+    status: "Completed",
+    totalAssets: 118,
+    verifiedAssets: 113,
+    createdAt: "2025-06-01T08:30:00Z",
+  },
+  {
+    id: "CEN-2024-004",
+    name: "Year-End Storage Reconciliation",
+    scope: "Full Company",
+    startDate: "2024-12-05",
+    deadline: "2024-12-20",
+    status: "Completed",
+    totalAssets: 221,
+    verifiedAssets: 219,
+    createdAt: "2024-11-28T11:00:00Z",
+  },
+  {
+    id: "CEN-2024-002",
+    name: "Remote Device Follow-up Census",
+    scope: "Department",
+    scopeValue: "Engineering",
+    startDate: "2024-05-04",
+    deadline: "2024-05-15",
+    status: "Overdue",
+    totalAssets: 37,
+    verifiedAssets: 31,
+    createdAt: "2024-04-27T07:45:00Z",
+  },
+]
+
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-dashed pb-3 text-sm last:border-b-0 last:pb-0">
@@ -213,6 +269,11 @@ export function StorageWorkspace() {
   const [archivedAssetIds, setArchivedAssetIds] = useState<string[]>([])
   const [origin, setOrigin] = useState("")
   const [qrDataUrl, setQrDataUrl] = useState("")
+  const [verifiedAssetIds, setVerifiedAssetIds] = useState<string[]>([])
+  const [selectedCensus, setSelectedCensus] = useState<Census | null>(null)
+  const [activeCensusView, setActiveCensusView] = useState<"overview" | "current-session">(
+    "overview",
+  )
 
   const allAssets = getAllAssets().filter((asset) => !archivedAssetIds.includes(asset.id))
   const selectedAsset = allAssets.find((asset) => asset.id === selectedAssetId) ?? allAssets[0]
@@ -268,6 +329,43 @@ export function StorageWorkspace() {
     (asset) => asset.status === "IN_REPAIR" || asset.status === "PENDING_DISPOSAL",
   ).length
   const canArchiveAssets = role === "inventory-head" || role === "system-admin"
+  const storageCensusSessions = [...mockCensuses, ...storageHistoricalCensuses].sort(
+    (left, right) =>
+      new Date(right.startDate).getTime() - new Date(left.startDate).getTime(),
+  )
+  const activeCensuses = storageCensusSessions.filter((census) => census.status === "Active")
+  const currentCensusSession = activeCensuses[0] ?? null
+  const previousCensusSessions = storageCensusSessions.filter(
+    (census) => census.id !== currentCensusSession?.id,
+  )
+  const currentCensusProgress = currentCensusSession
+    ? Math.round((currentCensusSession.verifiedAssets / currentCensusSession.totalAssets) * 100)
+    : 0
+  const verifiedCount = allAssets.filter(
+    (asset) => asset.verified || verifiedAssetIds.includes(asset.id),
+  ).length
+  const pendingVerificationAssets = allAssets.filter(
+    (asset) => !asset.verified && !verifiedAssetIds.includes(asset.id),
+  )
+  const discrepancyAssets = allAssets.filter(
+    (asset) => asset.status === "IN_REPAIR" || asset.status === "PENDING_DISPOSAL",
+  )
+  const selectedCensusProgress = selectedCensus
+    ? Math.round((selectedCensus.verifiedAssets / selectedCensus.totalAssets) * 100)
+    : 0
+  const selectedCensusInScopeAssets = selectedCensus
+    ? allAssets.filter((asset) => {
+        if (selectedCensus.scope === "Full Company") {
+          return true
+        }
+
+        if (selectedCensus.scope === "Asset Category") {
+          return asset.category === selectedCensus.scopeValue
+        }
+
+        return getOwnershipLabel(asset).department === selectedCensus.scopeValue
+      })
+    : []
   const storageCategoryCounts = storageCategoryGroups.map((group) => {
     const assets = allAssets.filter((asset) => group.types.includes(asset.category))
 
@@ -352,6 +450,17 @@ export function StorageWorkspace() {
     }
   }, [activeTab, selectedCategory, selectedStorageCategory])
 
+  useEffect(() => {
+    if (activeTab !== "census" && activeCensusView !== "overview") {
+      setActiveCensusView("overview")
+      return
+    }
+
+    if (!currentCensusSession && activeCensusView === "current-session") {
+      setActiveCensusView("overview")
+    }
+  }, [activeCensusView, activeTab, currentCensusSession])
+
   const handleArchiveAsset = (asset: Asset) => {
     setArchivedAssetIds((current) => [...current, asset.id])
 
@@ -412,6 +521,15 @@ export function StorageWorkspace() {
     setActiveTab("types")
   }
 
+  const markAssetVerified = (assetId: string) => {
+    setVerifiedAssetIds((current) =>
+      current.includes(assetId) ? current : [...current, assetId],
+    )
+    toast.success("Asset marked as verified", {
+      description: `${assetId} is now counted in the storage census view.`,
+    })
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-3">
@@ -454,9 +572,12 @@ export function StorageWorkspace() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-4">
-        <TabsList className="h-auto w-full justify-start rounded-2xl p-1 md:w-fit">
-          <TabsTrigger value="categories" className="rounded-xl px-4 py-2">
-            Categories
+          <TabsList className="h-auto w-full justify-start rounded-2xl p-1 md:w-fit">
+            <TabsTrigger value="categories" className="rounded-xl px-4 py-2">
+              All Assets (Audit)
+            </TabsTrigger>
+          <TabsTrigger value="census" className="rounded-xl px-4 py-2">
+            Census (тооллого)
           </TabsTrigger>
           {selectedStorageGroup ? (
             <TabsTrigger value="types" className="rounded-xl px-4 py-2">
@@ -480,10 +601,9 @@ export function StorageWorkspace() {
         <TabsContent value="categories" className="space-y-4">
           <Card className="rounded-[28px] border-0 shadow-sm">
             <CardHeader>
-              <CardTitle>Browse asset categories</CardTitle>
+              <CardTitle>All Assets (Audit)</CardTitle>
               <CardDescription>
-                Categories are the first layer in storage. Click a category card to open that
-                category's assets in its own tab.
+                Start with a category card, then drill into types and individual asset cards.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -554,6 +674,397 @@ export function StorageWorkspace() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="census" className="space-y-4">
+          <Card className="rounded-[28px] border-0 shadow-sm">
+            <CardHeader>
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <CardTitle>Storage Census (тооллого)</CardTitle>
+                  <CardDescription>
+                    Use storage as the operational side of Census (тооллого): track active periods, verify pending assets, and jump into the full census tools when needed.
+                  </CardDescription>
+                </div>
+                <Button asChild className="rounded-xl">
+                  <Link href="/auditor/scan">Open Auditor Scanner</Link>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Tabs
+                value={activeCensusView}
+                onValueChange={(value) =>
+                  setActiveCensusView(value as "overview" | "current-session")
+                }
+                className="gap-6"
+              >
+                <TabsList className="h-auto w-full justify-start rounded-2xl p-1 md:w-fit">
+                  <TabsTrigger value="overview" className="rounded-xl px-4 py-2">
+                    Overview
+                  </TabsTrigger>
+                  {currentCensusSession ? (
+                    <TabsTrigger value="current-session" className="rounded-xl px-4 py-2">
+                      Current Session
+                    </TabsTrigger>
+                  ) : null}
+                </TabsList>
+
+                <TabsContent value="overview" className="mt-0 space-y-6">
+              <div className="grid gap-4 md:grid-cols-4">
+                <Card className="rounded-3xl border-dashed shadow-none">
+                  <CardContent className="flex items-center gap-4 pt-6">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-500/10">
+                      <ClipboardList className="h-6 w-6 text-sky-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Current Census (тооллого)</p>
+                      <p className="text-3xl font-semibold tracking-tight">
+                        {currentCensusSession ? 1 : 0}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {currentCensusSession ? `${currentCensusProgress}% complete` : "No active session"}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-3xl border-dashed shadow-none">
+                  <CardContent className="flex items-center gap-4 pt-6">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/10">
+                      <Clock className="h-6 w-6 text-violet-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Previous Sessions</p>
+                      <p className="text-3xl font-semibold tracking-tight">
+                        {previousCensusSessions.length}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Historical results kept for reference
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-3xl border-dashed shadow-none">
+                  <CardContent className="flex items-center gap-4 pt-6">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10">
+                      <CheckCircle2 className="h-6 w-6 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Pending Verification</p>
+                      <p className="text-3xl font-semibold tracking-tight">
+                        {pendingVerificationAssets.length}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Still waiting in the live queue</p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-3xl border-dashed shadow-none">
+                  <CardContent className="flex items-center gap-4 pt-6">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/10">
+                      <AlertTriangle className="h-6 w-6 text-rose-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Discrepancies</p>
+                      <p className="text-3xl font-semibold tracking-tight">{discrepancyAssets.length}</p>
+                      <p className="text-xs text-muted-foreground">{verifiedCount} assets already verified</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-[1.15fr,0.85fr]">
+                <Card className="rounded-[28px] border-dashed shadow-none">
+                  <CardHeader>
+                    <CardTitle>Current active Census (тооллого) session</CardTitle>
+                    <CardDescription>
+                      Storage works inside the live session here, while older sessions remain visible as history below.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {currentCensusSession ? (
+                      <button
+                        type="button"
+                        onClick={() => setActiveCensusView("current-session")}
+                        className="w-full rounded-[28px] border border-dashed bg-muted/15 p-5 text-left transition-colors hover:border-primary/40 hover:bg-muted/30"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary">{currentCensusSession.status}</Badge>
+                          <Badge variant="outline">{currentCensusSession.scope}</Badge>
+                          {currentCensusSession.scopeValue ? (
+                            <Badge variant="outline">{currentCensusSession.scopeValue}</Badge>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-4 space-y-2">
+                          <p className="text-xl font-semibold">{currentCensusSession.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {currentCensusSession.verifiedAssets} / {currentCensusSession.totalAssets} verified
+                          </p>
+                        </div>
+
+                        <div className="mt-4 space-y-2">
+                          <div className="h-2 rounded-full bg-muted">
+                            <div
+                              className="h-2 rounded-full bg-primary"
+                              style={{ width: `${currentCensusProgress}%` }}
+                            />
+                          </div>
+                          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+                            <span>
+                              {new Date(currentCensusSession.startDate).toLocaleDateString()} -{" "}
+                              {new Date(currentCensusSession.deadline).toLocaleDateString()}
+                            </span>
+                            <span>{currentCensusProgress}% complete</span>
+                          </div>
+                        </div>
+                      </button>
+                    ) : (
+                      <div className="rounded-3xl border border-dashed bg-muted/20 px-4 py-10 text-center">
+                        <p className="font-medium">No active Census (тооллого) right now.</p>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          Open the HR census manager to create or start a new verification period.
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+              </div>
+              <Card className="rounded-[28px] border-dashed shadow-none">
+                <CardHeader>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <CardTitle>Previous census sessions</CardTitle>
+                      <CardDescription>
+                        Earlier sessions remain visible as finished history with different outcomes, while the current one stays actionable above.
+                      </CardDescription>
+                    </div>
+                    <Badge variant="outline">{previousCensusSessions.length} previous sessions</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4 xl:grid-cols-3 md:grid-cols-2">
+                    {previousCensusSessions.map((census) => {
+                      const progress =
+                        census.totalAssets > 0
+                          ? Math.round((census.verifiedAssets / census.totalAssets) * 100)
+                          : 0
+
+                      return (
+                        <button
+                          key={census.id}
+                          type="button"
+                          onClick={() => setSelectedCensus(census)}
+                          className="w-full rounded-[28px] border border-dashed bg-muted/15 p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/30"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="secondary">{census.status}</Badge>
+                            <Badge variant="outline">{census.scope}</Badge>
+                          </div>
+                          <div className="mt-4 space-y-1">
+                            <p className="font-medium">{census.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {census.scopeValue ?? "All in scope"}
+                            </p>
+                          </div>
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-2xl bg-background p-3">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                Result
+                              </p>
+                              <p className="mt-2 font-medium">
+                                {census.verifiedAssets} / {census.totalAssets}
+                              </p>
+                            </div>
+                            <div className="rounded-2xl bg-background p-3">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                Completion
+                              </p>
+                              <p className="mt-2 font-medium">{progress}%</p>
+                            </div>
+                          </div>
+                          <p className="mt-4 text-xs text-muted-foreground">
+                            {new Date(census.startDate).toLocaleDateString()} -{" "}
+                            {new Date(census.deadline).toLocaleDateString()}
+                          </p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+                </TabsContent>
+
+                <TabsContent value="current-session" className="mt-0 space-y-6">
+                  <Card className="rounded-[28px] border-dashed shadow-none">
+                    <CardHeader>
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <CardTitle>{currentCensusSession?.name ?? "Current Census Session"}</CardTitle>
+                          <CardDescription>
+                            This tab is the live working space for the active storage-side census session.
+                          </CardDescription>
+                        </div>
+                        <Button
+                          variant="outline"
+                          className="rounded-xl"
+                          onClick={() => setActiveCensusView("overview")}
+                        >
+                          Back to Overview
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {currentCensusSession ? (
+                        <>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="secondary">{currentCensusSession.status}</Badge>
+                            <Badge variant="outline">{currentCensusSession.scope}</Badge>
+                            {currentCensusSession.scopeValue ? (
+                              <Badge variant="outline">{currentCensusSession.scopeValue}</Badge>
+                            ) : null}
+                            <Badge variant="outline">{pendingVerificationAssets.length} pending</Badge>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="h-2 rounded-full bg-muted">
+                              <div
+                                className="h-2 rounded-full bg-primary"
+                                style={{ width: `${currentCensusProgress}%` }}
+                              />
+                            </div>
+                            <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                              <span className="text-muted-foreground">
+                                {currentCensusSession.verifiedAssets} / {currentCensusSession.totalAssets} verified
+                              </span>
+                              <span className="font-medium">{currentCensusProgress}% complete</span>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="rounded-3xl border border-dashed bg-muted/20 px-4 py-10 text-center">
+                          <p className="font-medium">No active session is available right now.</p>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            Return to overview or start a new census from the HR side.
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+              <Card className="rounded-[28px] border-dashed shadow-none">
+                <CardHeader>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <CardTitle>Pending verification assets</CardTitle>
+                      <CardDescription>
+                        Storage can work this queue directly and mark assets as verified for the demo session.
+                      </CardDescription>
+                    </div>
+                    <Badge variant="outline">{pendingVerificationAssets.length} pending</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {pendingVerificationAssets.length > 0 ? (
+                    <div className="grid gap-4 xl:grid-cols-3 md:grid-cols-2">
+                      {pendingVerificationAssets.slice(0, 6).map((asset) => {
+                        const owner = getEmployeeById(asset.assignedTo)
+                        const ownership = getOwnershipLabel(asset)
+
+                        return (
+                          <Card key={asset.id} className="overflow-hidden rounded-[28px] border-dashed shadow-none">
+                            <div className="relative aspect-[16/10] border-b border-dashed bg-muted/30">
+                              <Image
+                                src="/placeholder.jpg"
+                                alt={`${asset.name} preview`}
+                                fill
+                                className="object-cover"
+                              />
+                              <div className="absolute inset-0 bg-zinc-950/20" />
+                              <div className="absolute right-4 bottom-4 left-4 flex flex-wrap items-center gap-2">
+                                <Badge variant="secondary" className="bg-background/90 backdrop-blur">
+                                  {asset.category}
+                                </Badge>
+                                <Badge variant="outline" className="bg-background/90">
+                                  Pending census
+                                </Badge>
+                              </div>
+                            </div>
+
+                            <CardContent className="space-y-4 pt-6">
+                              <div className="space-y-1">
+                                <p className="text-lg font-semibold">{asset.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {asset.id} | {asset.serialNumber}
+                                </p>
+                              </div>
+
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="rounded-2xl bg-muted/35 p-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                    Ownership
+                                  </p>
+                                  {owner ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedEmployee(owner)}
+                                      className="mt-2 space-y-1 text-left transition-opacity hover:opacity-80"
+                                    >
+                                      <p className="font-medium text-primary">{ownership.name}</p>
+                                      <p className="text-sm text-muted-foreground">{ownership.subtitle}</p>
+                                    </button>
+                                  ) : (
+                                    <div className="mt-2 space-y-1">
+                                      <p className="font-medium">{ownership.name}</p>
+                                      <p className="text-sm text-muted-foreground">{ownership.subtitle}</p>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="rounded-2xl bg-muted/35 p-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                    Location
+                                  </p>
+                                  <p className="mt-2 font-medium">{asset.location}</p>
+                                  <p className="text-sm text-muted-foreground">{ownership.department}</p>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  className="rounded-xl"
+                                  onClick={() => markAssetVerified(asset.id)}
+                                >
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  Mark verified
+                                </Button>
+                                <Button asChild variant="outline" className="rounded-xl">
+                                  <Link href={`/storage/assets/${asset.id}`}>Asset detail</Link>
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-3xl border border-dashed bg-muted/20 px-4 py-12 text-center">
+                      <p className="font-medium">No pending verification assets.</p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Everything in the storage-side census queue is already verified for this demo session.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="types" className="space-y-4">
           <Card className="rounded-[28px] border-0 shadow-sm">
             <CardHeader>
@@ -569,7 +1080,7 @@ export function StorageWorkspace() {
                   className="rounded-xl"
                   onClick={() => setActiveTab("categories")}
                 >
-                  Back to categories
+                  Back to All Assets
                 </Button>
               </div>
             </CardHeader>
@@ -658,7 +1169,7 @@ export function StorageWorkspace() {
                   className="rounded-xl"
                   onClick={() => setActiveTab("types")}
                 >
-                  Back to types
+                  Back to Types
                 </Button>
               </div>
             </CardHeader>
@@ -1128,6 +1639,228 @@ export function StorageWorkspace() {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(selectedCensus)} onOpenChange={() => setSelectedCensus(null)}>
+        <DialogContent className="max-w-4xl rounded-[28px]">
+          {selectedCensus ? (
+            <>
+              <DialogHeader>
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary">{selectedCensus.status}</Badge>
+                    <Badge variant="outline">{selectedCensus.scope}</Badge>
+                    {selectedCensus.scopeValue ? (
+                      <Badge variant="outline">{selectedCensus.scopeValue}</Badge>
+                    ) : null}
+                  </div>
+                  <div>
+                    <DialogTitle>{selectedCensus.name}</DialogTitle>
+                    <DialogDescription>{selectedCensus.id}</DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="grid gap-4 md:grid-cols-4">
+                <Card className="rounded-3xl border-dashed shadow-none">
+                  <CardContent className="space-y-2 pt-6">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Completion
+                    </p>
+                    <p className="text-3xl font-semibold tracking-tight">
+                      {selectedCensusProgress}%
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedCensus.verifiedAssets} of {selectedCensus.totalAssets} verified
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-3xl border-dashed shadow-none">
+                  <CardContent className="space-y-2 pt-6">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Remaining
+                    </p>
+                    <p className="text-3xl font-semibold tracking-tight">
+                      {selectedCensus.totalAssets - selectedCensus.verifiedAssets}
+                    </p>
+                    <p className="text-sm text-muted-foreground">Still unresolved in this session</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-3xl border-dashed shadow-none">
+                  <CardContent className="space-y-2 pt-6">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      In Scope
+                    </p>
+                    <p className="text-3xl font-semibold tracking-tight">
+                      {selectedCensus.totalAssets}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedCensus.scopeValue ?? "Full company scope"}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-3xl border-dashed shadow-none">
+                  <CardContent className="space-y-2 pt-6">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Created
+                    </p>
+                    <p className="text-lg font-semibold">
+                      {new Date(selectedCensus.createdAt).toLocaleDateString()}
+                    </p>
+                    <p className="text-sm text-muted-foreground">Session creation date</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="space-y-3">
+                <div className="h-2 rounded-full bg-muted">
+                  <div
+                    className="h-2 rounded-full bg-primary"
+                    style={{ width: `${selectedCensusProgress}%` }}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">
+                    {new Date(selectedCensus.startDate).toLocaleDateString()} -{" "}
+                    {new Date(selectedCensus.deadline).toLocaleDateString()}
+                  </span>
+                  <span className="font-medium">{selectedCensusProgress}% complete</span>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card className="rounded-3xl border-dashed shadow-none">
+                  <CardContent className="space-y-3 pt-6">
+                    <DetailRow label="Scope" value={selectedCensus.scope} />
+                    <DetailRow label="Scope value" value={selectedCensus.scopeValue ?? "All in scope"} />
+                    <DetailRow label="Status" value={selectedCensus.status} />
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-3xl border-dashed shadow-none">
+                  <CardContent className="space-y-3 pt-6">
+                    <DetailRow
+                      label="Date range"
+                      value={`${new Date(selectedCensus.startDate).toLocaleDateString()} - ${new Date(selectedCensus.deadline).toLocaleDateString()}`}
+                    />
+                    <DetailRow
+                      label="Progress"
+                      value={`${selectedCensus.verifiedAssets} / ${selectedCensus.totalAssets}`}
+                    />
+                    <DetailRow
+                      label="Remaining"
+                      value={String(selectedCensus.totalAssets - selectedCensus.verifiedAssets)}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className="rounded-[28px] border-dashed shadow-none">
+                <CardHeader>
+                  <CardTitle>Session outcome</CardTitle>
+                  <CardDescription>
+                    A quick read of how this census session finished or where it currently stands.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="rounded-3xl border border-dashed bg-muted/20 p-4">
+                    <p className="font-medium">
+                      {selectedCensus.status === "Completed"
+                        ? "This session finished and its results are now historical."
+                        : selectedCensus.status === "Active"
+                          ? "This session is still live and should be worked from the current-session tab."
+                          : selectedCensus.status === "Overdue"
+                            ? "This session missed its deadline and still has unresolved verification work."
+                            : "This session is still being prepared before it becomes active."}
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Scope: {selectedCensus.scopeValue ?? "All in scope"} | Verified:{" "}
+                      {selectedCensus.verifiedAssets} / {selectedCensus.totalAssets}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-[28px] border-dashed shadow-none">
+                <CardHeader>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <CardTitle>Example assets in this session</CardTitle>
+                      <CardDescription>
+                        A few asset cards that fit this session's scope so the record feels concrete.
+                      </CardDescription>
+                    </div>
+                    <Badge variant="outline">
+                      {Math.min(selectedCensusInScopeAssets.length, 4)} shown
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {selectedCensusInScopeAssets.length > 0 ? (
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      {selectedCensusInScopeAssets.slice(0, 4).map((asset) => {
+                        const ownership = getOwnershipLabel(asset)
+
+                        return (
+                          <Card
+                            key={asset.id}
+                            className="overflow-hidden rounded-[28px] border-dashed shadow-none"
+                          >
+                            <div className="relative aspect-[16/10] border-b border-dashed bg-muted/30">
+                              <Image
+                                src="/placeholder.jpg"
+                                alt={`${asset.name} preview`}
+                                fill
+                                className="object-cover"
+                              />
+                              <div className="absolute inset-0 bg-zinc-950/20" />
+                              <div className="absolute right-4 bottom-4 left-4 flex flex-wrap items-center gap-2">
+                                <Badge variant="secondary" className="bg-background/90 backdrop-blur">
+                                  {asset.category}
+                                </Badge>
+                                <AssetStatusBadge status={asset.status} />
+                              </div>
+                            </div>
+
+                            <CardContent className="space-y-3 pt-5">
+                              <div className="space-y-1">
+                                <p className="font-semibold">{asset.name}</p>
+                                <p className="text-xs text-muted-foreground">{asset.id}</p>
+                              </div>
+                              <div className="rounded-2xl bg-muted/25 p-3">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                  Ownership
+                                </p>
+                                <p className="mt-2 font-medium">{ownership.name}</p>
+                                <p className="text-sm text-muted-foreground">{ownership.department}</p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-3xl border border-dashed bg-muted/20 px-4 py-10 text-center">
+                      <p className="font-medium">No matching demo assets were found for this scope.</p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        The census record is still available even when the current demo asset set is smaller than the historical session scope.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <div className="flex flex-wrap gap-2">
+                <Button asChild className="rounded-xl">
+                  <Link href="/auditor/scan">Open Auditor Scanner</Link>
+                </Button>
+              </div>
+            </>
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>

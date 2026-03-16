@@ -243,10 +243,10 @@ export const demoScreens: DemoScreenConfig[] = [
     id: "auditor-scan",
     workflow: "qr",
     ownerRole: "inventory-head",
-    label: "Auditor Scanner",
+    label: "Audit Management",
     href: "/auditor/scan",
     description:
-      "Walk through locations, scan QR codes, and record verification details.",
+      "Walk through locations, scan QR codes, and record audit verification details.",
     badge: "Step 2",
     roles: ["inventory-head", "system-admin"],
   },
@@ -254,11 +254,11 @@ export const demoScreens: DemoScreenConfig[] = [
     id: "employee-assets",
     workflow: "qr",
     ownerRole: "employee",
-    label: "Employee Asset Page",
+    label: "When Employee Scans QR Code",
     href: "/employee/assets/MAC-2026-001",
     description:
       "Open the employee-facing asset page that a QR code resolves to.",
-    badge: "Employee",
+    badge: "Step 3",
     roles: ["employee", "system-admin"],
   },
   {
@@ -413,17 +413,7 @@ export function getScreensForWorkflow(
 }
 
 export function getWorkflowSteps(workflow: DemoWorkflow): DemoScreenConfig[] {
-  return demoScreens.filter((screen) => {
-    if (screen.workflow !== workflow) {
-      return false
-    }
-
-    if (workflow === "qr" && screen.ownerRole === "employee") {
-      return false
-    }
-
-    return true
-  })
+  return demoScreens.filter((screen) => screen.workflow === workflow)
 }
 
 export function getActiveMenuId(

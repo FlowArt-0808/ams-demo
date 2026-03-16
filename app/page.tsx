@@ -22,6 +22,7 @@ import {
 } from "lucide-react"
 
 import { StorageWorkspace } from "@/components/demo/storage-workspace"
+import { OrderWorkspace } from "@/components/demo/order-workspace"
 import { LifecycleExceptionsWorkspace } from "@/components/demo/lifecycle-exceptions-workspace"
 import { useDemoRole } from "@/components/demo/demo-role-provider"
 import { Badge } from "@/components/ui/badge"
@@ -599,78 +600,6 @@ function WorkflowOverview({
         </Tabs>
       ) : null}
 
-      {workflow === "qr" ? (
-        <Card className="border-dashed bg-muted/25">
-          <CardHeader>
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-amber-500/10">
-                <UserCheck className="h-6 w-6 text-amber-600" />
-              </div>
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <CardTitle className="text-lg">When Employee Scans QR Code</CardTitle>
-                  <Badge variant="secondary" className="text-xs">
-                    Employee
-                  </Badge>
-                </div>
-                <CardDescription>
-                  After scanning the QR sticker, the flow jumps out of the workflow tabs and opens
-                  the employee asset page directly.
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border bg-background p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  1. Scan
-                </p>
-                <p className="mt-2 text-sm font-medium">Employee scans the QR sticker on the asset.</p>
-              </div>
-              <div className="rounded-2xl border bg-background p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  2. Jump
-                </p>
-                <p className="mt-2 text-sm font-medium">System opens the employee asset page for that specific asset.</p>
-              </div>
-              <div className="rounded-2xl border bg-background p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  3. Result
-                </p>
-                <p className="mt-2 text-sm font-medium">
-                  Employee sees ownership, condition, collapsible history, action buttons, and a
-                  collapsible list of their assigned assets.
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border bg-background p-5 shadow-sm">
-              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">Employee Asset Page</Badge>
-                    <Badge variant="outline">History Timeline</Badge>
-                    <Badge variant="outline">Assign Asset To Myself</Badge>
-                    <Badge variant="outline">Your Assets</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    This is the screen the employee should land on after scanning. It replaces the
-                    old employee QR-scan tab.
-                  </p>
-                </div>
-                <Button
-                  className="gap-2"
-                  onClick={() => onOpenStep("/employee/assets/MAC-2026-001", "employee")}
-                >
-                  Open Employee Result
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
     </div>
   )
 }
@@ -796,6 +725,8 @@ export default function HomePage() {
           ) : (
             <DashboardOverview />
           )
+        ) : activeMenuId === "order" ? (
+          <OrderWorkspace />
         ) : activeMenuId === "storage" ? (
           <StorageWorkspace />
         ) : activeMenuId === "missing-broken" || activeMenuId === "dispose" ? (

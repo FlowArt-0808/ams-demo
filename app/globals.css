@@ -122,4 +122,28 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  a[href],
+  a[href] *,
+  button:not(:disabled),
+  button:not(:disabled) *,
+  [type="button"]:not(:disabled),
+  [type="button"]:not(:disabled) *,
+  [role="button"]:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]) *,
+  [role="tab"],
+  [role="tab"] *,
+  [data-slot="tabs-trigger"],
+  [data-slot="tabs-trigger"] *,
+  [data-sidebar="menu-button"],
+  [data-sidebar="menu-button"] *,
+  summary,
+  summary * {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
 }
