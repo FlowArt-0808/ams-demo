@@ -16,8 +16,6 @@ const conditionClasses = {
   Damaged: "border-rose-200 bg-rose-500/10 text-rose-700",
 } as const
 
-const executiveAccessPhrase = "AMS-HIGHER-UPS"
-
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -52,14 +50,14 @@ export function EmployeeAssetPage({
   const holderContact = assignedToSelf ? "Awaiting internal approval" : owner?.email ?? "Asset Operations"
 
   const handleUnlock = () => {
-    if (accessPhrase.trim() === executiveAccessPhrase) {
+    if (accessPhrase.trim().length > 0) {
       setIsUnlocked(true)
       setErrorMessage("")
       return
     }
 
     setIsUnlocked(false)
-    setErrorMessage("Access phrase is incorrect. This detailed list is reserved for higher-ups.")
+    setErrorMessage("Enter any value to unlock this demo panel.")
   }
 
   return (
@@ -243,16 +241,19 @@ export function EmployeeAssetPage({
                     <div className="space-y-1">
                       <p className="font-medium">Protected detail gate</p>
                       <p className="text-sm text-muted-foreground">
-                        Enter the higher-up access phrase. Employees are not expected to know this.
+                        Enter any value to unlock this demo panel and reveal the detailed list.
                       </p>
                     </div>
 
                     <div className="flex flex-col gap-3 md:flex-row">
                       <Input
-                        type="password"
+                        type="text"
                         value={accessPhrase}
-                        onChange={(event) => setAccessPhrase(event.target.value)}
-                        placeholder="Enter higher-up access phrase"
+                        onChange={(event) => {
+                          setAccessPhrase(event.target.value)
+                          setErrorMessage("")
+                        }}
+                        placeholder="Type anything to unlock"
                       />
                       <Button onClick={handleUnlock} className="rounded-xl">
                         Unlock
