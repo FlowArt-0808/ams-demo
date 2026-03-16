@@ -1,0 +1,241 @@
+import Image from "next/image"
+import Link from "next/link"
+import { notFound } from "next/navigation"
+import { ArrowLeft, Link2, Package2, ShieldCheck, UserRound, Warehouse } from "lucide-react"
+
+import { AssetStatusBadge } from "@/components/demo/asset-status-badge"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { getAssetById, getAssignedAssetCount, getEmployeeById } from "@/lib/mock-data"
+
+const currencyFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+})
+
+const conditionClasses = {
+  Good: "border-emerald-200 bg-emerald-500/10 text-emerald-700",
+  Fair: "border-amber-200 bg-amber-500/10 text-amber-700",
+  Damaged: "border-rose-200 bg-rose-500/10 text-rose-700",
+} as const
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-dashed pb-3 text-sm last:border-b-0 last:pb-0">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-right font-medium">{value}</span>
+    </div>
+  )
+}
+
+export default async function StorageAssetDetailPage({
+  params,
+}: {
+  params: Promise<{ assetId: string }>
+}) {
+  const { assetId } = await params
+  const asset = getAssetById(assetId)
+
+  if (!asset) {
+    notFound()
+  }
+
+  const owner = getEmployeeById(asset.assignedTo)
+
+  return (
+    <div className="min-h-svh bg-background">
+      <main className="container space-y-6 px-4 py-8">
+        <div className="flex flex-col gap-4 rounded-[32px] bg-muted/35 p-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">Internal Asset Detail</Badge>
+            <AssetStatusBadge status={asset.status} />
+            <Badge variant="outline" className={conditionClasses[asset.condition]}>
+              {asset.condition}
+            </Badge>
+          </div>
+
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10">
+                  <Package2 className="h-7 w-7 text-amber-600" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold tracking-tight">{asset.name}</h1>
+                  <p className="text-sm text-muted-foreground">
+                    {asset.id} | {asset.serialNumber}
+                  </p>
+                </div>
+              </div>
+              <p className="max-w-3xl text-sm text-muted-foreground">{asset.description}</p>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Button asChild variant="outline" className="rounded-xl">
+                <Link href="/?view=storage">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to storage
+                </Link>
+              </Button>
+              <Button asChild className="rounded-xl">
+                <Link href={`/employee/assets/${asset.id}`}>
+                  <Link2 className="h-4 w-4" />
+                  Open employee page
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card className="rounded-3xl border-0 shadow-sm">
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground">Purchase Cost</p>
+              <p className="mt-2 text-3xl font-semibold tracking-tight">
+                {currencyFormatter.format(asset.purchaseCost)}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-3xl border-0 shadow-sm">
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground">Book Value</p>
+              <p className="mt-2 text-3xl font-semibold tracking-tight">
+                {currencyFormatter.format(asset.currentBookValue)}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-3xl border-0 shadow-sm">
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground">Current Holder</p>
+              <p className="mt-2 text-2xl font-semibold tracking-tight">
+                {owner?.name ?? "In storage"}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {owner ? owner.department : asset.location}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[1.05fr,0.95fr]">
+          <div className="space-y-4">
+            <Card className="rounded-[28px] border-0 shadow-sm">
+              <CardHeader>
+                <CardTitle>Asset image</CardTitle>
+                <CardDescription>Placeholder area for the asset photo.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-hidden rounded-[24px] border border-dashed bg-muted/30">
+                  <div className="relative aspect-[4/3]">
+                    <Image
+                      src="/placeholder.jpg"
+                      alt={`Placeholder image for ${asset.name}`}
+                      fill
+                      className="object-cover"
+                    />
+                    <div className="absolute inset-0 bg-zinc-950/30" />
+                    <div className="absolute right-4 bottom-4 rounded-full bg-background/90 px-3 py-1 text-xs font-medium shadow-sm">
+                      Placeholder asset photo
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-[28px] border-0 shadow-sm">
+              <CardHeader>
+                <CardTitle>Asset profile</CardTitle>
+                <CardDescription>
+                  Full operational details for relevant internal roles.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <InfoRow label="Asset tag" value={asset.id} />
+                <InfoRow label="Category" value={asset.category} />
+                <InfoRow label="Serial number" value={asset.serialNumber} />
+                <InfoRow label="Purchase date" value={asset.purchaseDate} />
+                <InfoRow label="Current location" value={asset.location} />
+                <InfoRow label="Condition" value={asset.condition} />
+                <InfoRow
+                  label="Last verification"
+                  value={
+                    asset.verifiedAt
+                      ? new Date(asset.verifiedAt).toLocaleDateString()
+                      : "Not verified in the active census"
+                  }
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-4">
+            <Card className="rounded-[28px] border-0 shadow-sm">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/10">
+                    <UserRound className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Ownership</CardTitle>
+                    <CardDescription>Current holder and responsible department.</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <InfoRow label="Assigned to" value={owner?.name ?? "Unassigned"} />
+                <InfoRow label="Department" value={owner?.department ?? "Storage"} />
+                <InfoRow label="Title" value={owner?.title ?? "Warehouse staging"} />
+                <InfoRow
+                  label="Assigned assets"
+                  value={owner ? String(getAssignedAssetCount(owner.id)) : "0"}
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-[28px] border-0 shadow-sm">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/10">
+                    <Warehouse className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Access and visibility</CardTitle>
+                    <CardDescription>What the QR route exposes versus the internal view.</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-2xl border border-dashed bg-muted/30 p-4 text-sm">
+                  <p className="font-medium">Employee QR page</p>
+                  <p className="mt-1 text-muted-foreground">
+                    Shows a limited asset summary for employees and scanners.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-dashed bg-muted/30 p-4 text-sm">
+                  <p className="font-medium">Internal asset record</p>
+                  <p className="mt-1 text-muted-foreground">
+                    Includes financial value, ownership context, and operational status.
+                  </p>
+                </div>
+                <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-500/10 p-4 text-sm text-amber-900">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>Access to this screen is intended for relevant internal roles only.</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}

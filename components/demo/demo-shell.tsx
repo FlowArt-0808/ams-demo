@@ -57,6 +57,7 @@ import {
   type DemoMenuId,
   type DemoRole,
 } from "@/lib/demo-navigation"
+import { cn } from "@/lib/utils"
 
 const menuIcons: Record<DemoMenuId, typeof House> = {
   home: House,
@@ -74,6 +75,16 @@ const menuIcons: Record<DemoMenuId, typeof House> = {
 const workflowRoleText: Partial<Record<DemoMenuId, string>> = {
   qr: "Roles: Inventory Head, Employee",
   "distribution-workflow": "Roles: HR, Employee",
+}
+
+const highlightedMenuIds = new Set<DemoMenuId>(["storage", "qr", "distribution-workflow"])
+
+function getHighlightedMenuClass(menuId: DemoMenuId) {
+  if (!highlightedMenuIds.has(menuId)) {
+    return undefined
+  }
+
+  return "border border-sidebar-primary/25 bg-sidebar-primary/10 font-semibold text-sidebar-foreground shadow-sm hover:bg-sidebar-primary/15 hover:text-sidebar-foreground data-[active=true]:border-sidebar-primary data-[active=true]:bg-sidebar-primary data-[active=true]:text-sidebar-primary-foreground"
 }
 
 export function DemoShell({
@@ -155,7 +166,10 @@ export function DemoShell({
                         asChild
                         isActive={activeMenuId === menu.id}
                         tooltip={`${menu.label} | ${workflowRoleText[menu.id] ?? "Workflow"}`}
-                        className="h-auto items-start px-2 py-2"
+                        className={cn(
+                          "h-auto items-start px-2 py-2",
+                          getHighlightedMenuClass(menu.id),
+                        )}
                       >
                         <Link href={menu.href}>
                           <Icon className="mt-0.5 h-4 w-4" />
@@ -188,6 +202,7 @@ export function DemoShell({
                         asChild
                         isActive={activeMenuId === menu.id}
                         tooltip={menu.label}
+                        className={getHighlightedMenuClass(menu.id)}
                       >
                         <Link href={menu.href}>
                           <Icon className="h-4 w-4" />

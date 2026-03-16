@@ -21,10 +21,12 @@ import {
   Warehouse,
 } from "lucide-react"
 
+import { StorageWorkspace } from "@/components/demo/storage-workspace"
 import { useDemoRole } from "@/components/demo/demo-role-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { mockAssets } from "@/lib/mock-data"
 import {
   getActiveMenuId,
@@ -53,7 +55,7 @@ const menuIcons: Record<DemoMenuId, typeof House> = {
 const screenIcons: Record<DemoScreenId, typeof QrCode> = {
   "hr-census": ClipboardList,
   "auditor-scan": QrCode,
-  "employee-verify": UserCheck,
+  "employee-assets": UserCheck,
   "hr-distribution": Package,
   "employee-request": Package,
   "employee-acknowledge": FileSignature,
@@ -74,7 +76,7 @@ const screenStyles: Record<
     iconWrap: "bg-emerald-500/10",
     icon: "text-emerald-600",
   },
-  "employee-verify": {
+  "employee-assets": {
     iconWrap: "bg-amber-500/10",
     icon: "text-amber-600",
   },
@@ -477,6 +479,8 @@ function WorkflowOverview({
   screens: ReturnType<typeof getWorkflowSteps>
   onOpenStep: (href: string, nextRole: ReturnType<typeof getRoleOption>["id"]) => void
 }) {
+  const defaultScreen = screens[0]
+
   return (
     <div className="max-w-4xl space-y-4">
       <Card className="border-dashed bg-muted/30">
@@ -504,51 +508,135 @@ function WorkflowOverview({
         </CardContent>
       </Card>
 
-      <div className="grid gap-4">
-        {screens.map((screen) => {
-          const Icon = screenIcons[screen.id]
-          const style = screenStyles[screen.id]
-          const ownerRole = getRoleOption(screen.ownerRole)
+      {defaultScreen ? (
+        <Tabs defaultValue={defaultScreen.id} className="gap-4">
+          <TabsList className="h-auto w-full justify-start rounded-2xl p-1">
+            {screens.map((screen) => (
+              <TabsTrigger
+                key={screen.id}
+                value={screen.id}
+                className="rounded-xl px-4 py-2 text-left"
+              >
+                {screen.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-          return (
-            <Card
-              key={screen.id}
-              className="group transition-colors hover:border-primary/50"
-            >
-              <CardHeader>
-                <div className="flex items-start gap-4">
-                  <div
-                    className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl ${style.iconWrap}`}
-                  >
-                    <Icon className={`h-6 w-6 ${style.icon}`} />
-                  </div>
-                  <div className="flex-1 space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <CardTitle className="text-lg">{screen.label}</CardTitle>
-                      <Badge variant="secondary" className="text-xs">
-                        {screen.badge}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        {ownerRole.label}
-                      </Badge>
+          {screens.map((screen) => {
+            const Icon = screenIcons[screen.id]
+            const style = screenStyles[screen.id]
+            const ownerRole = getRoleOption(screen.ownerRole)
+
+            return (
+              <TabsContent key={screen.id} value={screen.id}>
+                <Card className="group transition-colors hover:border-primary/50">
+                  <CardHeader>
+                    <div className="flex items-start gap-4">
+                      <div
+                        className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl ${style.iconWrap}`}
+                      >
+                        <Icon className={`h-6 w-6 ${style.icon}`} />
+                      </div>
+                      <div className="flex-1 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <CardTitle className="text-lg">{screen.label}</CardTitle>
+                          <Badge variant="secondary" className="text-xs">
+                            {screen.badge}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {ownerRole.label}
+                          </Badge>
+                        </div>
+                        <CardDescription>{screen.description}</CardDescription>
+                      </div>
                     </div>
-                    <CardDescription>{screen.description}</CardDescription>
-                  </div>
+                  </CardHeader>
+                  <CardContent>
+                    <Button
+                      className="w-full gap-2 group-hover:bg-primary/90"
+                      onClick={() => onOpenStep(screen.href, screen.ownerRole)}
+                    >
+                      Switch to {ownerRole.label}
+                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )
+          })}
+        </Tabs>
+      ) : null}
+
+      {workflow === "qr" ? (
+        <Card className="border-dashed bg-muted/25">
+          <CardHeader>
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-amber-500/10">
+                <UserCheck className="h-6 w-6 text-amber-600" />
+              </div>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <CardTitle className="text-lg">When Employee Scans QR Code</CardTitle>
+                  <Badge variant="secondary" className="text-xs">
+                    Employee
+                  </Badge>
                 </div>
-              </CardHeader>
-              <CardContent>
+                <CardDescription>
+                  After scanning the QR sticker, the flow jumps out of the workflow tabs and opens
+                  the employee asset page directly.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-2xl border bg-background p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  1. Scan
+                </p>
+                <p className="mt-2 text-sm font-medium">Employee scans the QR sticker on the asset.</p>
+              </div>
+              <div className="rounded-2xl border bg-background p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  2. Jump
+                </p>
+                <p className="mt-2 text-sm font-medium">System opens the employee asset page for that specific asset.</p>
+              </div>
+              <div className="rounded-2xl border bg-background p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  3. Result
+                </p>
+                <p className="mt-2 text-sm font-medium">
+                  Employee sees ownership, condition, history timeline, and action buttons.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border bg-background p-5 shadow-sm">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">Employee Asset Page</Badge>
+                    <Badge variant="outline">History Timeline</Badge>
+                    <Badge variant="outline">Assign Asset To Myself</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    This is the screen the employee should land on after scanning. It replaces the
+                    old employee QR-scan tab.
+                  </p>
+                </div>
                 <Button
-                  className="w-full gap-2 group-hover:bg-primary/90"
-                  onClick={() => onOpenStep(screen.href, screen.ownerRole)}
+                  className="gap-2"
+                  onClick={() => onOpenStep("/employee/assets/MAC-2026-001", "employee")}
                 >
-                  Switch to {ownerRole.label}
-                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  Open Employee Result
+                  <ArrowRight className="h-4 w-4" />
                 </Button>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   )
 }
@@ -658,7 +746,7 @@ export default function HomePage() {
                     <CardContent>
                       <Link href={screen.href}>
                         <Button className="w-full gap-2 group-hover:bg-primary/90">
-                          Open Screen
+                          {screen.id === "employee-assets" ? "Verify Asset" : "Open Screen"}
                           <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                         </Button>
                       </Link>
@@ -670,6 +758,8 @@ export default function HomePage() {
           ) : (
             <DashboardOverview />
           )
+        ) : activeMenuId === "storage" ? (
+          <StorageWorkspace />
         ) : (
           <Card className="max-w-2xl border-dashed">
             <CardContent className="py-10">

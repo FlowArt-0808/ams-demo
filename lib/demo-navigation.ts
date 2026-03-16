@@ -9,6 +9,13 @@ export type DemoRole =
 
 export type DemoWorkflow = "qr" | "distribution"
 
+const storageDetailRoles: DemoRole[] = [
+  "inventory-head",
+  "hr",
+  "finance",
+  "system-admin",
+]
+
 export type DemoMenuId =
   | "home"
   | "order"
@@ -26,7 +33,7 @@ export type DemoMenuSection = "main" | "workflow"
 export type DemoScreenId =
   | "hr-census"
   | "auditor-scan"
-  | "employee-verify"
+  | "employee-assets"
   | "hr-distribution"
   | "employee-request"
   | "employee-acknowledge"
@@ -75,7 +82,7 @@ export const demoRoles: DemoRoleOption[] = [
   {
     id: "employee",
     label: "Employee",
-    description: "Uses employee-facing asset, acknowledgment, and QR verification screens.",
+    description: "Uses employee-facing asset pages, requests, and acknowledgment screens.",
   },
   {
     id: "inventory-head",
@@ -139,7 +146,7 @@ export const demoMenus: DemoMenuConfig[] = [
   {
     id: "storage",
     label: "Storage",
-    description: "View warehouses and the assets currently inside them.",
+    description: "Browse the asset register, inspect ownership, and generate QR label links.",
     href: "/?view=storage",
     section: "main",
     roles: ["inventory-head", "hr", "system-admin"],
@@ -220,13 +227,13 @@ export const demoScreens: DemoScreenConfig[] = [
     roles: ["inventory-head", "system-admin"],
   },
   {
-    id: "employee-verify",
+    id: "employee-assets",
     workflow: "qr",
     ownerRole: "employee",
-    label: "QR Scanner",
-    href: "/employee/verify",
+    label: "Employee Asset Page",
+    href: "/employee/assets/MAC-2026-001",
     description:
-      "Employees confirm possession of their assigned assets from a QR flow.",
+      "Open the employee-facing asset page that a QR code resolves to.",
     badge: "Employee",
     roles: ["employee", "system-admin"],
   },
@@ -327,13 +334,31 @@ export function getScreensForWorkflow(
 }
 
 export function getWorkflowSteps(workflow: DemoWorkflow): DemoScreenConfig[] {
-  return demoScreens.filter((screen) => screen.workflow === workflow)
+  return demoScreens.filter((screen) => {
+    if (screen.workflow !== workflow) {
+      return false
+    }
+
+    if (workflow === "qr" && screen.ownerRole === "employee") {
+      return false
+    }
+
+    return true
+  })
 }
 
 export function getActiveMenuId(
   pathname: string,
   searchParams: URLSearchParams,
 ): DemoMenuId {
+  if (pathname.startsWith("/storage/assets/")) {
+    return "storage"
+  }
+
+  if (pathname.startsWith("/employee/assets/")) {
+    return "qr"
+  }
+
   if (pathname === "/") {
     if (searchParams.get("workflow") === "distribution") {
       return "distribution-workflow"
@@ -356,7 +381,7 @@ export function getActiveMenuId(
     return "distribution"
   }
 
-  if (pathname === "/employee/verify" || pathname === "/auditor/scan" || pathname === "/hr/census") {
+  if (pathname === "/auditor/scan" || pathname === "/hr/census") {
     return "qr"
   }
 
@@ -375,6 +400,14 @@ export function canAccessPath(role: DemoRole, pathname: string): boolean {
     return true
   }
 
+  if (pathname.startsWith("/storage/assets/")) {
+    return storageDetailRoles.includes(role)
+  }
+
+  if (pathname.startsWith("/employee/assets/")) {
+    return true
+  }
+
   const screen = getScreenByPath(pathname)
   if (!screen) {
     return true
@@ -384,7 +417,15 @@ export function canAccessPath(role: DemoRole, pathname: string): boolean {
 }
 
 export function getFallbackHref(role: DemoRole, pathname: string): string {
-  if (pathname === "/employee/verify" || pathname === "/auditor/scan" || pathname === "/hr/census") {
+  if (pathname.startsWith("/storage/assets/")) {
+    const storageMenu = demoMenus.find((menu) => menu.id === "storage")
+
+    if (storageMenu && storageMenu.roles.includes(role)) {
+      return resolveMenuItem(storageMenu, role).href
+    }
+  }
+
+  if (pathname === "/auditor/scan" || pathname === "/hr/census") {
     const workflowMenu = demoMenus.find((menu) => menu.id === "qr")
 
     if (workflowMenu && workflowMenu.roles.includes(role)) {
