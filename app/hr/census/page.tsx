@@ -197,7 +197,19 @@ export default function HRCensusPage() {
                 : 0
 
               return (
-                <Card key={census.id} className="overflow-hidden">
+                <Card
+                  key={census.id}
+                  className="cursor-pointer overflow-hidden transition-colors hover:border-primary/40 hover:bg-muted/20"
+                  onClick={() => handleViewDetails(census)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault()
+                      handleViewDetails(census)
+                    }
+                  }}
+                >
                   <CardHeader className="pb-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="space-y-1">
@@ -215,11 +227,15 @@ export default function HRCensusPage() {
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(event) => event.stopPropagation()}
+                          >
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
                           {census.status === "Draft" && (
                             <DropdownMenuItem onClick={() => handleStartCensus(census.id)}>
                               <Send className="mr-2 h-4 w-4" />

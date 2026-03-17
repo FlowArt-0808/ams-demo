@@ -2,9 +2,10 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ComponentProps } from "react"
 import QRCode from "qrcode"
 import {
+  ArrowUpDown,
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
@@ -12,6 +13,7 @@ import {
   Download,
   Laptop,
   Link2,
+  MoreHorizontal,
   Monitor,
   Package2,
   Smartphone,
@@ -19,7 +21,6 @@ import {
   Search,
   ShieldAlert,
   Tablet,
-  Trash2,
   UserRound,
   Warehouse,
 } from "lucide-react"
@@ -29,13 +30,14 @@ import { AssetStatusBadge } from "@/components/demo/asset-status-badge"
 import { useDemoRole } from "@/components/demo/demo-role-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Dialog,
   DialogContent,
@@ -51,6 +53,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   assetCategories,
@@ -66,6 +76,7 @@ import {
   type Census,
   type Employee,
 } from "@/lib/mock-data"
+import { cn } from "@/lib/utils"
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -73,7 +84,42 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 })
 
+const dateFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+})
+
+function Card({ className, ...props }: ComponentProps<"div">) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-5 border-b border-border/70 bg-transparent py-5",
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
+function CardHeader({ className, ...props }: ComponentProps<"div">) {
+  return <div className={cn("grid gap-2 px-0", className)} {...props} />
+}
+
+function CardTitle({ className, ...props }: ComponentProps<"div">) {
+  return <div className={cn("text-lg font-semibold leading-tight", className)} {...props} />
+}
+
+function CardDescription({ className, ...props }: ComponentProps<"div">) {
+  return <div className={cn("text-sm text-muted-foreground", className)} {...props} />
+}
+
+function CardContent({ className, ...props }: ComponentProps<"div">) {
+  return <div className={cn("px-0", className)} {...props} />
+}
+
 const conditionClasses = {
+  "N/A": "border-zinc-300 bg-zinc-500/10 text-zinc-600",
   Good: "border-emerald-200 bg-emerald-500/10 text-emerald-700",
   Fair: "border-amber-200 bg-amber-500/10 text-amber-700",
   Damaged: "border-rose-200 bg-rose-500/10 text-rose-700",
@@ -121,6 +167,17 @@ const categoryStyles: Record<
 }
 
 type StorageCategoryGroupId = "it-equipment" | "furniture" | "sport"
+type ExtendedAssetStatus = Asset["status"] | "MISSING" | "BROKEN"
+type AssetSortKey =
+  | "id"
+  | "name"
+  | "purchaseDate"
+  | "category"
+  | "location"
+  | "condition"
+  | "status"
+  | "holder"
+  | "purchaseCost"
 
 const storageCategoryGroups: Array<{
   id: StorageCategoryGroupId
@@ -172,10 +229,17 @@ const ownershipOptions = [
 
 const conditionOptions = [
   { id: "all", label: "All conditions" },
+  { id: "N/A", label: "N/A" },
   { id: "Good", label: "Good" },
   { id: "Fair", label: "Fair" },
   { id: "Damaged", label: "Damaged" },
 ] as const
+
+const extendedStatusLabels: Record<ExtendedAssetStatus, string> = {
+  ...assetStatusLabels,
+  MISSING: "Missing",
+  BROKEN: "Broken",
+}
 
 const storageHistoricalCensuses: Census[] = [
   {
@@ -227,6 +291,19 @@ const storageHistoricalCensuses: Census[] = [
   },
 ]
 
+const searchableAssetFields = [
+  "Asset ID",
+  "Asset Name",
+  "Serial Number",
+  "Category",
+  "Type",
+  "Holder",
+  "Location",
+  "Department",
+  "Condition",
+  "Status",
+] as const
+
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-dashed pb-3 text-sm last:border-b-0 last:pb-0">
@@ -256,14 +333,20 @@ function getOwnershipLabel(asset: Asset) {
 
 export function StorageWorkspace() {
   const { role } = useDemoRole()
-  const [activeTab, setActiveTab] = useState("categories")
+  const [activeTab, setActiveTab] = useState("inventory")
   const [searchQuery, setSearchQuery] = useState("")
+  const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [selectedStorageCategory, setSelectedStorageCategory] = useState<StorageCategoryGroupId | "all">("all")
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [selectedOwnership, setSelectedOwnership] = useState("all")
   const [selectedCondition, setSelectedCondition] = useState("all")
-  const [selectedStatus, setSelectedStatus] = useState("all")
+  const [selectedStatus, setSelectedStatus] = useState<ExtendedAssetStatus | "all">("all")
+  const [selectedDate, setSelectedDate] = useState("all")
   const [selectedDepartment, setSelectedDepartment] = useState("all")
+  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([])
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, ExtendedAssetStatus>>({})
+  const [sortKey, setSortKey] = useState<AssetSortKey>("purchaseDate")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
   const [selectedAssetId, setSelectedAssetId] = useState("MAC-2026-001")
   const [archivedAssetIds, setArchivedAssetIds] = useState<string[]>([])
@@ -280,16 +363,27 @@ export function StorageWorkspace() {
   const employeeHref = selectedAsset ? `/employee/assets/${selectedAsset.id}` : ""
   const employeeUrl =
     origin && employeeHref ? new URL(employeeHref, origin).toString() : employeeHref
+  const getEffectiveStatus = (asset: Asset): ExtendedAssetStatus =>
+    statusOverrides[asset.id] ?? asset.status
+  const getEffectiveCondition = (asset: Asset) =>
+    getEffectiveStatus(asset) === "MISSING" || getEffectiveStatus(asset) === "BROKEN"
+      ? "N/A"
+      : asset.condition
 
   const filteredAssets = allAssets.filter((asset) => {
     const ownership = getOwnershipLabel(asset)
+    const storageGroupLabel =
+      storageCategoryGroups.find((group) => group.types.includes(asset.category))?.label ?? "Uncategorized"
+    const effectiveStatus = getEffectiveStatus(asset)
     const haystack = [
       asset.id,
       asset.name,
       asset.serialNumber,
+      asset.category,
+      storageGroupLabel,
       asset.description,
-      asset.condition,
-      assetStatusLabels[asset.status],
+      getEffectiveCondition(asset),
+      extendedStatusLabels[effectiveStatus],
       ownership.name,
       ownership.subtitle,
       ownership.department,
@@ -302,31 +396,93 @@ export function StorageWorkspace() {
 
     const matchesSearch =
       searchQuery.trim().length === 0 || haystack.includes(searchQuery.trim().toLowerCase())
+    const matchesStorageCategory =
+      selectedStorageCategory === "all" ||
+      storageCategoryGroups
+        .find((group) => group.id === selectedStorageCategory)
+        ?.types.includes(asset.category)
     const matchesCategory = selectedCategory === "all" || asset.category === selectedCategory
     const matchesOwnership =
       selectedOwnership === "all" ||
       (selectedOwnership === "assigned" && Boolean(asset.assignedTo)) ||
       (selectedOwnership === "storage" && !asset.assignedTo)
     const matchesCondition =
-      selectedCondition === "all" || asset.condition === selectedCondition
-    const matchesStatus = selectedStatus === "all" || asset.status === selectedStatus
+      selectedCondition === "all" || getEffectiveCondition(asset) === selectedCondition
+    const matchesStatus = selectedStatus === "all" || effectiveStatus === selectedStatus
+    const matchesDate =
+      selectedDate === "all" || new Date(asset.purchaseDate).getFullYear().toString() === selectedDate
     const matchesDepartment =
       selectedDepartment === "all" || ownership.department === selectedDepartment
 
     return (
+      matchesStorageCategory &&
       matchesSearch &&
       matchesCategory &&
       matchesOwnership &&
       matchesCondition &&
       matchesStatus &&
+      matchesDate &&
       matchesDepartment
     )
+  })
+  const sortedAssets = [...filteredAssets].sort((left, right) => {
+    const leftOwner = getOwnershipLabel(left)
+    const rightOwner = getOwnershipLabel(right)
+    const leftStatus = getEffectiveStatus(left)
+    const rightStatus = getEffectiveStatus(right)
+
+    const leftValue =
+      sortKey === "id"
+        ? left.id
+        : sortKey === "name"
+          ? left.name
+          : sortKey === "purchaseDate"
+            ? new Date(left.purchaseDate).getTime()
+            : sortKey === "category"
+              ? left.category
+              : sortKey === "location"
+                ? left.location
+                : sortKey === "condition"
+                  ? left.condition
+                  : sortKey === "status"
+                    ? extendedStatusLabels[leftStatus]
+                    : sortKey === "holder"
+                      ? leftOwner.name
+                      : left.purchaseCost
+
+    const rightValue =
+      sortKey === "id"
+        ? right.id
+        : sortKey === "name"
+          ? right.name
+          : sortKey === "purchaseDate"
+            ? new Date(right.purchaseDate).getTime()
+            : sortKey === "category"
+              ? right.category
+              : sortKey === "location"
+                ? right.location
+                : sortKey === "condition"
+                  ? right.condition
+                  : sortKey === "status"
+                    ? extendedStatusLabels[rightStatus]
+                    : sortKey === "holder"
+                      ? rightOwner.name
+                      : right.purchaseCost
+
+    if (typeof leftValue === "number" && typeof rightValue === "number") {
+      return sortDirection === "asc" ? leftValue - rightValue : rightValue - leftValue
+    }
+
+    return sortDirection === "asc"
+      ? String(leftValue).localeCompare(String(rightValue))
+      : String(rightValue).localeCompare(String(leftValue))
   })
 
   const assignedCount = allAssets.filter((asset) => asset.assignedTo).length
   const storageCount = allAssets.filter((asset) => !asset.assignedTo).length
   const flaggedCount = allAssets.filter(
-    (asset) => asset.status === "IN_REPAIR" || asset.status === "PENDING_DISPOSAL",
+    (asset) =>
+      getEffectiveStatus(asset) === "IN_REPAIR" || getEffectiveStatus(asset) === "PENDING_DISPOSAL",
   ).length
   const canArchiveAssets = role === "inventory-head" || role === "system-admin"
   const storageCensusSessions = [...mockCensuses, ...storageHistoricalCensuses].sort(
@@ -348,7 +504,8 @@ export function StorageWorkspace() {
     (asset) => !asset.verified && !verifiedAssetIds.includes(asset.id),
   )
   const discrepancyAssets = allAssets.filter(
-    (asset) => asset.status === "IN_REPAIR" || asset.status === "PENDING_DISPOSAL",
+    (asset) =>
+      getEffectiveStatus(asset) === "IN_REPAIR" || getEffectiveStatus(asset) === "PENDING_DISPOSAL",
   )
   const selectedCensusProgress = selectedCensus
     ? Math.round((selectedCensus.verifiedAssets / selectedCensus.totalAssets) * 100)
@@ -374,14 +531,17 @@ export function StorageWorkspace() {
       count: assets.length,
       assigned: assets.filter((asset) => Boolean(asset.assignedTo)).length,
       flagged: assets.filter(
-        (asset) => asset.status === "IN_REPAIR" || asset.status === "PENDING_DISPOSAL",
+        (asset) =>
+          getEffectiveStatus(asset) === "IN_REPAIR" || getEffectiveStatus(asset) === "PENDING_DISPOSAL",
       ).length,
     }
   })
   const selectedStorageGroup =
     storageCategoryGroups.find((group) => group.id === selectedStorageCategory) ?? null
   const typeCounts = assetCategories
-    .filter((category) => selectedStorageGroup?.types.includes(category))
+    .filter((category) =>
+      selectedStorageGroup ? selectedStorageGroup.types.includes(category) : true,
+    )
     .map((category) => {
     const assets = allAssets.filter((asset) => asset.category === category)
 
@@ -390,16 +550,23 @@ export function StorageWorkspace() {
       count: assets.length,
       assigned: assets.filter((asset) => Boolean(asset.assignedTo)).length,
       flagged: assets.filter(
-        (asset) => asset.status === "IN_REPAIR" || asset.status === "PENDING_DISPOSAL",
+        (asset) =>
+          getEffectiveStatus(asset) === "IN_REPAIR" || getEffectiveStatus(asset) === "PENDING_DISPOSAL",
       ).length,
     }
   })
   const activeFilterCount = [
+    selectedStorageCategory !== "all",
+    selectedCategory !== "all",
     selectedOwnership !== "all",
     selectedCondition !== "all",
     selectedStatus !== "all",
+    selectedDate !== "all",
     selectedDepartment !== "all",
   ].filter(Boolean).length
+  const purchaseYears = Array.from(
+    new Set(allAssets.map((asset) => new Date(asset.purchaseDate).getFullYear().toString())),
+  ).sort((left, right) => Number(right) - Number(left))
 
   useEffect(() => {
     setOrigin(window.location.origin)
@@ -440,17 +607,6 @@ export function StorageWorkspace() {
   }, [employeeUrl, selectedAsset?.id])
 
   useEffect(() => {
-    if (selectedStorageCategory === "all" && (activeTab === "types" || activeTab === "category-assets")) {
-      setActiveTab("categories")
-      return
-    }
-
-    if (selectedCategory === "all" && activeTab === "category-assets") {
-      setActiveTab("types")
-    }
-  }, [activeTab, selectedCategory, selectedStorageCategory])
-
-  useEffect(() => {
     if (activeTab !== "census" && activeCensusView !== "overview") {
       setActiveCensusView("overview")
       return
@@ -463,6 +619,7 @@ export function StorageWorkspace() {
 
   const handleArchiveAsset = (asset: Asset) => {
     setArchivedAssetIds((current) => [...current, asset.id])
+    setSelectedAssetIds((current) => current.filter((id) => id !== asset.id))
 
     if (selectedAssetId === asset.id) {
       const fallbackAsset = allAssets.find((item) => item.id !== asset.id)
@@ -474,6 +631,34 @@ export function StorageWorkspace() {
     toast.success(`${asset.id} archived from the working list`, {
       description: "The asset card is hidden from this demo view, but audit history is retained.",
     })
+  }
+
+  const handleDisposeSelectedAssets = () => {
+    if (selectedAssetIds.length === 0) {
+      return
+    }
+
+    setStatusOverrides((current) =>
+      Object.fromEntries([
+        ...Object.entries(current),
+        ...selectedAssetIds.map((id) => [id, "PENDING_DISPOSAL" as const]),
+      ]),
+    )
+    toast.success("Selected assets marked for disposal", {
+      description: `${selectedAssetIds.length} asset(s) moved to pending disposal.`,
+    })
+  }
+
+  const handleArchiveSelectedAssets = () => {
+    if (selectedAssetIds.length === 0) {
+      return
+    }
+
+    setArchivedAssetIds((current) => [...new Set([...current, ...selectedAssetIds])])
+    toast.success("Selected assets archived", {
+      description: `${selectedAssetIds.length} asset(s) hidden from the working list.`,
+    })
+    setSelectedAssetIds([])
   }
 
   const handleCopyEmployeeLink = async () => {
@@ -497,28 +682,8 @@ export function StorageWorkspace() {
     setSelectedOwnership("all")
     setSelectedCondition("all")
     setSelectedStatus("all")
+    setSelectedDate("all")
     setSelectedDepartment("all")
-  }
-
-  const openCategoryTab = (category: AssetCategory) => {
-    setSelectedCategory(category)
-    setSearchQuery("")
-    setSelectedOwnership("all")
-    setSelectedCondition("all")
-    setSelectedStatus("all")
-    setSelectedDepartment("all")
-    setActiveTab("category-assets")
-  }
-
-  const openStorageCategoryTab = (categoryId: StorageCategoryGroupId) => {
-    setSelectedStorageCategory(categoryId)
-    setSelectedCategory("all")
-    setSearchQuery("")
-    setSelectedOwnership("all")
-    setSelectedCondition("all")
-    setSelectedStatus("all")
-    setSelectedDepartment("all")
-    setActiveTab("types")
   }
 
   const markAssetVerified = (assetId: string) => {
@@ -528,6 +693,19 @@ export function StorageWorkspace() {
     toast.success("Asset marked as verified", {
       description: `${assetId} is now counted in the storage census view.`,
     })
+  }
+
+  const allVisibleSelected =
+    sortedAssets.length > 0 && sortedAssets.every((asset) => selectedAssetIds.includes(asset.id))
+
+  const toggleSort = (key: AssetSortKey) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"))
+      return
+    }
+
+    setSortKey(key)
+    setSortDirection(key === "purchaseDate" || key === "purchaseCost" ? "desc" : "asc")
   }
 
   return (
@@ -573,22 +751,12 @@ export function StorageWorkspace() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-4">
           <TabsList className="h-auto w-full justify-start rounded-2xl p-1 md:w-fit">
-            <TabsTrigger value="categories" className="rounded-xl px-4 py-2">
-              All Assets (Audit)
+            <TabsTrigger value="inventory" className="rounded-xl px-4 py-2">
+              Inventory
             </TabsTrigger>
           <TabsTrigger value="census" className="rounded-xl px-4 py-2">
             Census (тооллого)
           </TabsTrigger>
-          {selectedStorageGroup ? (
-            <TabsTrigger value="types" className="rounded-xl px-4 py-2">
-              {selectedStorageGroup.label} Types
-            </TabsTrigger>
-          ) : null}
-          {selectedCategory !== "all" ? (
-            <TabsTrigger value="category-assets" className="rounded-xl px-4 py-2">
-              {selectedCategory} Assets
-            </TabsTrigger>
-          ) : null}
           <TabsTrigger
             value="create-qr-code"
             className="rounded-xl border border-amber-500/60 bg-amber-50 px-4 py-2 font-semibold text-amber-700 shadow-[0_10px_24px_-18px_rgba(245,158,11,0.95)] hover:bg-amber-100 data-[state=active]:border-amber-500 data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-[0_14px_28px_-16px_rgba(245,158,11,0.95)]"
@@ -598,78 +766,453 @@ export function StorageWorkspace() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="categories" className="space-y-4">
+        <TabsContent value="inventory" className="space-y-4">
           <Card className="rounded-[28px] border-0 shadow-sm">
             <CardHeader>
-              <CardTitle>All Assets (Audit)</CardTitle>
-              <CardDescription>
-                Start with a category card, then drill into types and individual asset cards.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium">Browse by category</p>
-                    <p className="text-sm text-muted-foreground">
-                      Click a category card to switch into its types tab.
-                    </p>
-                  </div>
-                  <Badge variant="outline">{storageCategoryCounts.length} categories</Badge>
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <CardTitle>Inventory</CardTitle>
+                  <CardDescription>
+                    Search, filter, and work the storage asset list from one table.
+                  </CardDescription>
                 </div>
-
-                <div className="grid gap-4 xl:grid-cols-3 md:grid-cols-2">
-                  {storageCategoryCounts.map(({ id, label, description, count, assigned, flagged, icon: Icon, iconClass, iconWrap, panelClass }) => {
-
-                    return (
-                      <Card
-                        key={id}
-                        className={`overflow-hidden rounded-[28px] transition-colors ${
-                          selectedStorageCategory === id
-                            ? "border-primary shadow-sm"
-                            : "border-dashed shadow-none hover:border-primary/40"
-                        }`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => openStorageCategoryTab(id)}
-                          className="block w-full text-left"
-                        >
-                          <div className={`relative aspect-[16/10] border-b border-dashed ${panelClass}`}>
-                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.9),transparent_45%)]" />
-                            <div className="absolute top-4 right-4">
-                              <Badge variant="secondary">{count} assets</Badge>
-                            </div>
-                            <div className="absolute inset-x-4 bottom-4 flex items-end justify-between gap-3">
-                              <div className="space-y-1">
-                                <Badge variant="outline" className="bg-background/85">
-                                  Category view
-                                </Badge>
-                                <p className="text-xl font-semibold">{label}</p>
-                              </div>
-                              <div
-                                className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-background/90 shadow-sm ${iconWrap}`}
-                              >
-                                <Icon className={`h-6 w-6 ${iconClass}`} />
-                              </div>
-                            </div>
-                          </div>
-
-                          <CardContent className="space-y-4 pt-6">
-                            <p className="text-sm text-muted-foreground">{description}</p>
-                            <div className="flex flex-wrap gap-2">
-                              <Badge variant="outline">{assigned} assigned</Badge>
-                              <Badge variant="outline">{count - assigned} in storage</Badge>
-                              <Badge variant="outline">{flagged} flagged</Badge>
-                            </div>
-                          </CardContent>
-                        </button>
-                      </Card>
-                    )
-                  })}
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline">{filteredAssets.length} visible</Badge>
+                  <Badge variant="outline">{activeFilterCount} active filters</Badge>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Search</p>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onBlur={() => {
+                      window.setTimeout(() => setIsSearchFocused(false), 120)
+                    }}
+                    className="pl-9"
+                    placeholder="Search assets, owners, serial numbers, location, or cost..."
+                  />
+                  {isSearchFocused ? (
+                    <div className="absolute top-[calc(100%+0.5rem)] z-20 w-full rounded-2xl border bg-background p-4 shadow-lg">
+                      <p className="text-sm font-medium">Searchable fields</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        You can search across these fields from one input.
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {searchableAssetFields.map((field) => (
+                          <button
+                            key={field}
+                            type="button"
+                            className="rounded-full border px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => setSearchQuery(field)}
+                          >
+                            {field}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
+              <div className="space-y-3 rounded-[24px] border bg-background p-4">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Filters</p>
+                    <p className="text-sm text-muted-foreground">
+                      Narrow the table without leaving this page.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                      <Select
+                        value={selectedStatus}
+                        onValueChange={(value) => setSelectedStatus(value as ExtendedAssetStatus | "all")}
+                      >
+                      <SelectTrigger className="h-11 min-w-[160px] rounded-full border bg-background px-4">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Status: All</SelectItem>
+                        {assetStatuses.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {assetStatusLabels[status]}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="MISSING">Missing</SelectItem>
+                        <SelectItem value="BROKEN">Broken</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={selectedOwnership} onValueChange={setSelectedOwnership}>
+                      <SelectTrigger className="h-11 min-w-[170px] rounded-full border bg-background px-4">
+                        <SelectValue placeholder="Ownership" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ownershipOptions.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {option.id === "all" ? "Ownership: All" : option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={selectedCondition} onValueChange={setSelectedCondition}>
+                      <SelectTrigger className="h-11 min-w-[165px] rounded-full border bg-background px-4">
+                        <SelectValue placeholder="Condition" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {conditionOptions.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {option.id === "all" ? "Condition: All" : option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={selectedDate} onValueChange={setSelectedDate}>
+                      <SelectTrigger className="h-11 min-w-[145px] rounded-full border bg-background px-4">
+                        <SelectValue placeholder="Date" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Date: All</SelectItem>
+                        {purchaseYears.map((year) => (
+                          <SelectItem key={year} value={year}>
+                            {year}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select
+                      value={selectedStorageCategory}
+                      onValueChange={(value) =>
+                        setSelectedStorageCategory(value as StorageCategoryGroupId | "all")
+                      }
+                    >
+                      <SelectTrigger className="h-11 min-w-[170px] rounded-full border bg-background px-4">
+                        <SelectValue placeholder="Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Category: All</SelectItem>
+                        {storageCategoryGroups.map((group) => (
+                          <SelectItem key={group.id} value={group.id}>
+                            {group.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                      <SelectTrigger className="h-11 min-w-[150px] rounded-full border bg-background px-4">
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Type: All</SelectItem>
+                        {typeCounts.map(({ category }) => (
+                          <SelectItem key={category} value={category}>
+                            {category}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex flex-wrap gap-2">
+                    {selectedStorageGroup ? (
+                      <Badge variant="secondary">Category: {selectedStorageGroup.label}</Badge>
+                    ) : null}
+                    {selectedCategory !== "all" ? (
+                      <Badge variant="secondary">Type: {selectedCategory}</Badge>
+                    ) : null}
+                    {selectedOwnership !== "all" ? (
+                      <Badge variant="secondary">Ownership: {ownershipOptions.find((option) => option.id === selectedOwnership)?.label}</Badge>
+                    ) : null}
+                    {selectedCondition !== "all" ? (
+                      <Badge variant="secondary">Condition: {selectedCondition}</Badge>
+                    ) : null}
+                    {selectedStatus !== "all" ? (
+                      <Badge variant="secondary">Status: {extendedStatusLabels[selectedStatus]}</Badge>
+                    ) : null}
+                    {selectedDate !== "all" ? (
+                      <Badge variant="secondary">Date: {selectedDate}</Badge>
+                    ) : null}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selectedAssetIds.length > 0 ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" className="h-11 rounded-full px-5">
+                            More options ({selectedAssetIds.length})
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-52">
+                          <DropdownMenuItem onClick={handleDisposeSelectedAssets}>
+                            Mark as disposal
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => toast.success("Export queued", {
+                            description: `${selectedAssetIds.length} selected asset(s) prepared for export.`,
+                          })}>
+                            Export selected
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => setSelectedAssetIds([])}>
+                            Clear selection
+                          </DropdownMenuItem>
+                          {canArchiveAssets ? (
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onClick={handleArchiveSelectedAssets}
+                            >
+                              Delete selected
+                            </DropdownMenuItem>
+                          ) : null}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : null}
+                    <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                      <SelectTrigger className="h-11 min-w-[170px] rounded-full border bg-background px-4">
+                        <SelectValue placeholder="Department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Department: All</SelectItem>
+                        {departments.map((department) => (
+                          <SelectItem key={department} value={department}>
+                            {department}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Button
+                      variant="ghost"
+                      className="h-11 rounded-full px-5"
+                      onClick={() => {
+                        setSelectedStorageCategory("all")
+                        setSelectedCategory("all")
+                        resetFilters()
+                      }}
+                    >
+                      Reset all
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  Showing <span className="font-medium text-foreground">{filteredAssets.length}</span> assets in one table.
+                </p>
+                <Badge variant="outline">Storage asset list</Badge>
+              </div>
+
+              {filteredAssets.length === 0 ? (
+                <div className="rounded-3xl border border-dashed bg-muted/20 px-4 py-12 text-center">
+                  <div className="space-y-2">
+                    <p className="font-medium">No assets match the current filters.</p>
+                    <p className="text-sm text-muted-foreground">
+                      Try a broader search or reset one of the filters above.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-[28px] border bg-background">
+                  <Table className="min-w-[1120px]">
+                    <TableHeader className="bg-muted/35">
+                      <TableRow className="border-b hover:bg-muted/35">
+                        <TableHead className="w-12 px-4">
+                          <Checkbox
+                            checked={allVisibleSelected}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedAssetIds(sortedAssets.map((asset) => asset.id))
+                                return
+                              }
+
+                              setSelectedAssetIds([])
+                            }}
+                            aria-label="Select all visible assets"
+                          />
+                        </TableHead>
+                        <TableHead className="w-14">№</TableHead>
+                        <TableHead>
+                          <Button variant="ghost" className="h-auto px-0 font-medium" onClick={() => toggleSort("id")}>
+                            Asset ID
+                            <ArrowUpDown className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableHead>
+                        <TableHead>
+                          <Button variant="ghost" className="h-auto px-0 font-medium" onClick={() => toggleSort("name")}>
+                            Asset Name
+                            <ArrowUpDown className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableHead>
+                        <TableHead>
+                          <Button variant="ghost" className="h-auto px-0 font-medium" onClick={() => toggleSort("purchaseDate")}>
+                            Date
+                            <ArrowUpDown className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableHead>
+                        <TableHead>
+                          <Button variant="ghost" className="h-auto px-0 font-medium" onClick={() => toggleSort("category")}>
+                            Category
+                            <ArrowUpDown className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableHead>
+                        <TableHead>
+                          <Button variant="ghost" className="h-auto px-0 font-medium" onClick={() => toggleSort("location")}>
+                            Location
+                            <ArrowUpDown className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableHead>
+                        <TableHead>
+                          <Button variant="ghost" className="h-auto px-0 font-medium" onClick={() => toggleSort("condition")}>
+                            Condition
+                            <ArrowUpDown className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableHead>
+                        <TableHead>
+                          <Button variant="ghost" className="h-auto px-0 font-medium" onClick={() => toggleSort("status")}>
+                            Status
+                            <ArrowUpDown className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableHead>
+                        <TableHead>
+                          <Button variant="ghost" className="h-auto px-0 font-medium" onClick={() => toggleSort("holder")}>
+                            Holder
+                            <ArrowUpDown className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableHead>
+                        <TableHead className="text-right">
+                          <Button variant="ghost" className="h-auto px-0 font-medium" onClick={() => toggleSort("purchaseCost")}>
+                            Purchase Cost
+                            <ArrowUpDown className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableHead>
+                        <TableHead className="px-4 text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sortedAssets.map((asset, index) => {
+                        const owner = getEmployeeById(asset.assignedTo)
+                        const ownership = getOwnershipLabel(asset)
+                        const effectiveStatus = getEffectiveStatus(asset)
+
+                        return (
+                          <TableRow key={asset.id} className="border-b last:border-b-0">
+                            <TableCell className="px-4">
+                              <Checkbox
+                                checked={selectedAssetIds.includes(asset.id)}
+                                onCheckedChange={(checked) => {
+                                  setSelectedAssetIds((current) =>
+                                    checked
+                                      ? [...new Set([...current, asset.id])]
+                                      : current.filter((id) => id !== asset.id),
+                                  )
+                                }}
+                                aria-label={`Select ${asset.id}`}
+                              />
+                            </TableCell>
+                            <TableCell>{index + 1}</TableCell>
+                            <TableCell className="font-medium">{asset.id}</TableCell>
+                            <TableCell>
+                              <div className="min-w-0">
+                                <p className="max-w-[240px] truncate font-medium">{asset.name}</p>
+                                <p className="text-xs text-muted-foreground">{asset.serialNumber}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell>{dateFormatter.format(new Date(asset.purchaseDate))}</TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className="rounded-full">
+                                {asset.category}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div>
+                                <p>{asset.location}</p>
+                                <p className="text-xs text-muted-foreground">{ownership.department}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={`${conditionClasses[getEffectiveCondition(asset)]} rounded-full`}>
+                                {getEffectiveCondition(asset)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <AssetStatusBadge status={effectiveStatus} />
+                            </TableCell>
+                            <TableCell>
+                              {owner ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedEmployee(owner)}
+                                  className="text-left transition-opacity hover:opacity-80"
+                                >
+                                  <p className="font-medium text-primary">{ownership.name}</p>
+                                  <p className="text-xs text-muted-foreground">{ownership.subtitle}</p>
+                                </button>
+                              ) : (
+                                <div>
+                                  <p className="font-medium">{ownership.name}</p>
+                                  <p className="text-xs text-muted-foreground">{ownership.subtitle}</p>
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {currencyFormatter.format(asset.purchaseCost)}
+                            </TableCell>
+                            <TableCell className="px-4">
+                              <div className="flex justify-end">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8 rounded-full text-muted-foreground"
+                                      aria-label={`Open actions for ${asset.id}`}
+                                    >
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem asChild>
+                                      <Link href={`/storage/assets/${asset.id}`}>View details</Link>
+                                    </DropdownMenuItem>
+                                    {canArchiveAssets ? (
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          variant="destructive"
+                                          onClick={() => handleArchiveAsset(asset)}
+                                        >
+                                          Delete
+                                        </DropdownMenuItem>
+                                      </>
+                                    ) : null}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                Inventory can archive an asset from this working list in the demo; the real system
+                would keep the audit trail and historical record.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -684,9 +1227,14 @@ export function StorageWorkspace() {
                     Use storage as the operational side of Census (тооллого): track active periods, verify pending assets, and jump into the full census tools when needed.
                   </CardDescription>
                 </div>
-                <Button asChild className="rounded-xl">
-                  <Link href="/auditor/scan">Open Auditor Scanner</Link>
-                </Button>
+                <div className="flex flex-wrap gap-3">
+                  <Button asChild variant="outline" className="rounded-xl">
+                    <Link href="/hr/census">Create a Census</Link>
+                  </Button>
+                  <Button asChild className="rounded-xl">
+                    <Link href="/auditor/scan">Open Auditor Scanner</Link>
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -967,86 +1515,86 @@ export function StorageWorkspace() {
                 </CardHeader>
                 <CardContent>
                   {pendingVerificationAssets.length > 0 ? (
-                    <div className="grid gap-4 xl:grid-cols-3 md:grid-cols-2">
+                    <div className="overflow-hidden rounded-2xl border">
+                      <Table>
+                        <TableHeader className="bg-muted/35">
+                          <TableRow className="hover:bg-muted/35">
+                            <TableHead className="px-4">Asset</TableHead>
+                            <TableHead>Category</TableHead>
+                            <TableHead>Location</TableHead>
+                            <TableHead>Holder</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="px-4 text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                       {pendingVerificationAssets.slice(0, 6).map((asset) => {
                         const owner = getEmployeeById(asset.assignedTo)
                         const ownership = getOwnershipLabel(asset)
 
                         return (
-                          <Card key={asset.id} className="overflow-hidden rounded-[28px] border-dashed shadow-none">
-                            <div className="relative aspect-[16/10] border-b border-dashed bg-muted/30">
-                              <Image
-                                src="/placeholder.jpg"
-                                alt={`${asset.name} preview`}
-                                fill
-                                className="object-cover"
-                              />
-                              <div className="absolute inset-0 bg-zinc-950/20" />
-                              <div className="absolute right-4 bottom-4 left-4 flex flex-wrap items-center gap-2">
-                                <Badge variant="secondary" className="bg-background/90 backdrop-blur">
-                                  {asset.category}
-                                </Badge>
-                                <Badge variant="outline" className="bg-background/90">
-                                  Pending census
-                                </Badge>
-                              </div>
-                            </div>
-
-                            <CardContent className="space-y-4 pt-6">
-                              <div className="space-y-1">
-                                <p className="text-lg font-semibold">{asset.name}</p>
-                                <p className="text-sm text-muted-foreground">
+                          <TableRow key={asset.id}>
+                            <TableCell className="px-4">
+                              <div>
+                                <p className="font-medium">{asset.name}</p>
+                                <p className="text-xs text-muted-foreground">
                                   {asset.id} | {asset.serialNumber}
                                 </p>
                               </div>
-
-                              <div className="grid gap-3 sm:grid-cols-2">
-                                <div className="rounded-2xl bg-muted/35 p-3">
-                                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                    Ownership
-                                  </p>
-                                  {owner ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => setSelectedEmployee(owner)}
-                                      className="mt-2 space-y-1 text-left transition-opacity hover:opacity-80"
-                                    >
-                                      <p className="font-medium text-primary">{ownership.name}</p>
-                                      <p className="text-sm text-muted-foreground">{ownership.subtitle}</p>
-                                    </button>
-                                  ) : (
-                                    <div className="mt-2 space-y-1">
-                                      <p className="font-medium">{ownership.name}</p>
-                                      <p className="text-sm text-muted-foreground">{ownership.subtitle}</p>
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className="rounded-2xl bg-muted/35 p-3">
-                                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                    Location
-                                  </p>
-                                  <p className="mt-2 font-medium">{asset.location}</p>
-                                  <p className="text-sm text-muted-foreground">{ownership.department}</p>
-                                </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className="rounded-full">
+                                {asset.category}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div>
+                                <p>{asset.location}</p>
+                                <p className="text-xs text-muted-foreground">{ownership.department}</p>
                               </div>
-
-                              <div className="flex flex-wrap gap-2">
+                            </TableCell>
+                            <TableCell>
+                              {owner ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedEmployee(owner)}
+                                  className="text-left transition-opacity hover:opacity-80"
+                                >
+                                  <p className="font-medium text-primary">{ownership.name}</p>
+                                  <p className="text-xs text-muted-foreground">{ownership.subtitle}</p>
+                                </button>
+                              ) : (
+                                <div>
+                                  <p className="font-medium">{ownership.name}</p>
+                                  <p className="text-xs text-muted-foreground">{ownership.subtitle}</p>
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="rounded-full">
+                                Pending census
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="px-4">
+                              <div className="flex justify-end gap-2">
                                 <Button
-                                  className="rounded-xl"
+                                  size="sm"
+                                  className="rounded-lg"
                                   onClick={() => markAssetVerified(asset.id)}
                                 >
                                   <CheckCircle2 className="h-4 w-4" />
                                   Mark verified
                                 </Button>
-                                <Button asChild variant="outline" className="rounded-xl">
+                                <Button asChild size="sm" variant="outline" className="rounded-lg">
                                   <Link href={`/storage/assets/${asset.id}`}>Asset detail</Link>
                                 </Button>
                               </div>
-                            </CardContent>
-                          </Card>
+                            </TableCell>
+                          </TableRow>
                         )
                       })}
+                        </TableBody>
+                      </Table>
                     </div>
                   ) : (
                     <div className="rounded-3xl border border-dashed bg-muted/20 px-4 py-12 text-center">
@@ -1061,395 +1609,6 @@ export function StorageWorkspace() {
 
                 </TabsContent>
               </Tabs>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="types" className="space-y-4">
-          <Card className="rounded-[28px] border-0 shadow-sm">
-            <CardHeader>
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <CardTitle>{selectedStorageGroup?.label ?? "Category"} types</CardTitle>
-                  <CardDescription>
-                    Choose a type inside this storage category to open the matching asset cards.
-                  </CardDescription>
-                </div>
-                <Button
-                  variant="outline"
-                  className="rounded-xl"
-                  onClick={() => setActiveTab("categories")}
-                >
-                  Back to All Assets
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {typeCounts.length > 0 ? (
-                <div className="grid gap-4 xl:grid-cols-3 md:grid-cols-2">
-                  {typeCounts.map(({ category, count, assigned, flagged }) => {
-                    const style = categoryStyles[category]
-                    const Icon = style.icon
-
-                    return (
-                      <Card
-                        key={category}
-                        className={`overflow-hidden rounded-[28px] transition-colors ${
-                          selectedCategory === category
-                            ? "border-primary shadow-sm"
-                            : "border-dashed shadow-none hover:border-primary/40"
-                        }`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => openCategoryTab(category)}
-                          className="block w-full text-left"
-                        >
-                          <div className={`relative aspect-[16/10] border-b border-dashed ${style.panelClass}`}>
-                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.9),transparent_45%)]" />
-                            <div className="absolute top-4 right-4">
-                              <Badge variant="secondary">{count} assets</Badge>
-                            </div>
-                            <div className="absolute inset-x-4 bottom-4 flex items-end justify-between gap-3">
-                              <div className="space-y-1">
-                                <Badge variant="outline" className="bg-background/85">
-                                  Type view
-                                </Badge>
-                                <p className="text-xl font-semibold">{category}</p>
-                              </div>
-                              <div
-                                className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-background/90 shadow-sm ${style.iconWrap}`}
-                              >
-                                <Icon className={`h-6 w-6 ${style.iconClass}`} />
-                              </div>
-                            </div>
-                          </div>
-
-                          <CardContent className="space-y-4 pt-6">
-                            <p className="text-sm text-muted-foreground">
-                              Open the {category.toLowerCase()} asset tab and browse that type.
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              <Badge variant="outline">{assigned} assigned</Badge>
-                              <Badge variant="outline">{count - assigned} in storage</Badge>
-                              <Badge variant="outline">{flagged} flagged</Badge>
-                            </div>
-                          </CardContent>
-                        </button>
-                      </Card>
-                    )
-                  })}
-                </div>
-              ) : (
-                <div className="rounded-3xl border border-dashed bg-muted/20 px-4 py-12 text-center">
-                  <div className="space-y-2">
-                    <p className="font-medium">No types are seeded for this category yet.</p>
-                    <p className="text-sm text-muted-foreground">
-                      This category structure is ready, but the current demo data is still focused on IT equipment.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="category-assets" className="space-y-4">
-          <Card className="rounded-[28px] border-0 shadow-sm">
-            <CardHeader>
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <CardTitle>{selectedCategory} asset cards</CardTitle>
-                  <CardDescription>
-                    Search and filter within the selected type, then open the matching asset cards.
-                  </CardDescription>
-                </div>
-                <Button
-                  variant="outline"
-                  className="rounded-xl"
-                  onClick={() => setActiveTab("types")}
-                >
-                  Back to Types
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Search</p>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    className="pl-9"
-                    placeholder={`Search within ${selectedCategory.toLowerCase()} assets...`}
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 rounded-[24px] border border-dashed bg-muted/20 p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Filters</p>
-                    <p className="text-sm text-muted-foreground">
-                      Use filters separately from search to narrow the selected type.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">{activeFilterCount} active filters</Badge>
-                    <Button
-                      variant="ghost"
-                      className="rounded-xl"
-                      onClick={resetFilters}
-                      disabled={activeFilterCount === 0}
-                    >
-                      Reset filters
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      Status
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant={selectedStatus === "all" ? "default" : "outline"}
-                        className="rounded-full"
-                        onClick={() => setSelectedStatus("all")}
-                      >
-                        Any status
-                      </Button>
-                      {assetStatuses.map((status) => (
-                        <Button
-                          key={status}
-                          variant={selectedStatus === status ? "default" : "outline"}
-                          className="rounded-full"
-                          onClick={() => setSelectedStatus(status)}
-                        >
-                          {assetStatusLabels[status]}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      Ownership
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {ownershipOptions.map((option) => (
-                        <Button
-                          key={option.id}
-                          variant={selectedOwnership === option.id ? "default" : "outline"}
-                          className="rounded-full"
-                          onClick={() => setSelectedOwnership(option.id)}
-                        >
-                          {option.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      Condition
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {conditionOptions.map((option) => (
-                        <Button
-                          key={option.id}
-                          variant={selectedCondition === option.id ? "default" : "outline"}
-                          className="rounded-full"
-                          onClick={() => setSelectedCondition(option.id)}
-                        >
-                          {option.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 lg:grid-cols-[1fr,auto] lg:items-end">
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        Department
-                      </p>
-                      <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-                        <SelectTrigger className="w-full lg:max-w-xs">
-                          <SelectValue placeholder="Department" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Any department</SelectItem>
-                          {departments.map((department) => (
-                            <SelectItem key={department} value={department}>
-                              {department}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 lg:justify-end">
-                      {selectedStorageGroup ? (
-                        <Badge variant="secondary">Category: {selectedStorageGroup.label}</Badge>
-                      ) : null}
-                      {selectedCategory !== "all" ? (
-                        <Badge variant="secondary">Type: {selectedCategory}</Badge>
-                      ) : null}
-                      {selectedOwnership !== "all" ? (
-                        <Badge variant="secondary">Ownership: {ownershipOptions.find((option) => option.id === selectedOwnership)?.label}</Badge>
-                      ) : null}
-                      {selectedCondition !== "all" ? (
-                        <Badge variant="secondary">Condition: {selectedCondition}</Badge>
-                      ) : null}
-                      {selectedStatus !== "all" ? (
-                        <Badge variant="secondary">Status: {assetStatusLabels[selectedStatus as keyof typeof assetStatusLabels]}</Badge>
-                      ) : null}
-                      {selectedDepartment !== "all" ? (
-                        <Badge variant="secondary">Department: {selectedDepartment}</Badge>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground">
-                  Showing <span className="font-medium text-foreground">{filteredAssets.length}</span>{" "}
-                  {selectedCategory === "all"
-                    ? "assets as cards."
-                    : `${selectedCategory.toLowerCase()} assets as cards.`}
-                </p>
-                <Badge variant="outline">Card-first register view</Badge>
-              </div>
-
-              {filteredAssets.length === 0 ? (
-                <div className="rounded-3xl border border-dashed bg-muted/20 px-4 py-12 text-center">
-                  <div className="space-y-2">
-                    <p className="font-medium">No assets match the current filters.</p>
-                    <p className="text-sm text-muted-foreground">
-                      Try a broader search or reset one of the filters above.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid gap-4 xl:grid-cols-3 md:grid-cols-2">
-                  {filteredAssets.map((asset) => {
-                    const owner = getEmployeeById(asset.assignedTo)
-                    const ownership = getOwnershipLabel(asset)
-
-                    return (
-                      <Card key={asset.id} className="overflow-hidden rounded-[28px] border-dashed shadow-none">
-                        <div className="relative aspect-[16/10] border-b border-dashed bg-muted/30">
-                          <Image
-                            src="/placeholder.jpg"
-                            alt={`${asset.name} preview`}
-                            fill
-                            className="object-cover"
-                          />
-                          <div className="absolute inset-0 bg-zinc-950/20" />
-                          <div className="absolute right-4 bottom-4 left-4 flex flex-wrap items-center gap-2">
-                            <Badge variant="secondary" className="bg-background/90 backdrop-blur">
-                              {asset.category}
-                            </Badge>
-                            <AssetStatusBadge status={asset.status} />
-                            <Badge variant="outline" className={`${conditionClasses[asset.condition]} bg-background/90`}>
-                              {asset.condition}
-                            </Badge>
-                          </div>
-                        </div>
-
-                        <CardContent className="space-y-4 pt-6">
-                          <div className="space-y-1">
-                            <p className="text-lg font-semibold">{asset.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {asset.id} | {asset.serialNumber}
-                            </p>
-                          </div>
-
-                          <p className="text-sm text-muted-foreground">{asset.description}</p>
-
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <div className="rounded-2xl bg-muted/35 p-3">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                Ownership
-                              </p>
-                              {owner ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedEmployee(owner)}
-                                  className="mt-2 space-y-1 text-left transition-opacity hover:opacity-80"
-                                >
-                                  <p className="font-medium text-primary">{ownership.name}</p>
-                                  <p className="text-sm text-muted-foreground">{ownership.subtitle}</p>
-                                </button>
-                              ) : (
-                                <div className="mt-2 space-y-1">
-                                  <p className="font-medium">{ownership.name}</p>
-                                  <p className="text-sm text-muted-foreground">{ownership.subtitle}</p>
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="rounded-2xl bg-muted/35 p-3">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                Location
-                              </p>
-                              <p className="mt-2 font-medium">{asset.location}</p>
-                              <p className="text-sm text-muted-foreground">{ownership.department}</p>
-                            </div>
-                          </div>
-
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <div className="rounded-2xl border border-dashed p-3">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                Purchase Cost
-                              </p>
-                              <p className="mt-2 font-medium">
-                                {currencyFormatter.format(asset.purchaseCost)}
-                              </p>
-                            </div>
-                            <div className="rounded-2xl border border-dashed p-3">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                Book Value
-                              </p>
-                              <p className="mt-2 font-medium">
-                                {currencyFormatter.format(asset.currentBookValue)}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap gap-2">
-                            <Button asChild className="rounded-xl">
-                              <Link href={`/storage/assets/${asset.id}`}>Asset detail</Link>
-                            </Button>
-                            <Button asChild variant="outline" className="rounded-xl">
-                              <Link href={`/employee/assets/${asset.id}`}>Employee QR page</Link>
-                            </Button>
-                            {canArchiveAssets ? (
-                              <Button
-                                variant="ghost"
-                                className="rounded-xl text-muted-foreground"
-                                aria-label={`Archive ${asset.id}`}
-                                onClick={() => handleArchiveAsset(asset)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                Archive
-                              </Button>
-                            ) : null}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
-                </div>
-              )}
-
-              <p className="text-xs text-muted-foreground">
-                Inventory can archive an asset from this working list in the demo; the real system
-                would keep the audit trail and historical record.
-              </p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1791,7 +1950,7 @@ export function StorageWorkspace() {
                     <div>
                       <CardTitle>Example assets in this session</CardTitle>
                       <CardDescription>
-                        A few asset cards that fit this session's scope so the record feels concrete.
+                        A few assets that fit this session's scope so the record feels concrete.
                       </CardDescription>
                     </div>
                     <Badge variant="outline">
@@ -1801,47 +1960,44 @@ export function StorageWorkspace() {
                 </CardHeader>
                 <CardContent>
                   {selectedCensusInScopeAssets.length > 0 ? (
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="overflow-hidden rounded-2xl border">
+                      <Table>
+                        <TableHeader className="bg-muted/35">
+                          <TableRow className="hover:bg-muted/35">
+                            <TableHead className="px-4">Asset</TableHead>
+                            <TableHead>Category</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Owner</TableHead>
+                            <TableHead>Department</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                       {selectedCensusInScopeAssets.slice(0, 4).map((asset) => {
                         const ownership = getOwnershipLabel(asset)
 
                         return (
-                          <Card
-                            key={asset.id}
-                            className="overflow-hidden rounded-[28px] border-dashed shadow-none"
-                          >
-                            <div className="relative aspect-[16/10] border-b border-dashed bg-muted/30">
-                              <Image
-                                src="/placeholder.jpg"
-                                alt={`${asset.name} preview`}
-                                fill
-                                className="object-cover"
-                              />
-                              <div className="absolute inset-0 bg-zinc-950/20" />
-                              <div className="absolute right-4 bottom-4 left-4 flex flex-wrap items-center gap-2">
-                                <Badge variant="secondary" className="bg-background/90 backdrop-blur">
-                                  {asset.category}
-                                </Badge>
-                                <AssetStatusBadge status={asset.status} />
-                              </div>
-                            </div>
-
-                            <CardContent className="space-y-3 pt-5">
-                              <div className="space-y-1">
-                                <p className="font-semibold">{asset.name}</p>
+                          <TableRow key={asset.id}>
+                            <TableCell className="px-4">
+                              <div>
+                                <p className="font-medium">{asset.name}</p>
                                 <p className="text-xs text-muted-foreground">{asset.id}</p>
                               </div>
-                              <div className="rounded-2xl bg-muted/25 p-3">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                  Ownership
-                                </p>
-                                <p className="mt-2 font-medium">{ownership.name}</p>
-                                <p className="text-sm text-muted-foreground">{ownership.department}</p>
-                              </div>
-                            </CardContent>
-                          </Card>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className="rounded-full">
+                                {asset.category}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <AssetStatusBadge status={asset.status} />
+                            </TableCell>
+                            <TableCell>{ownership.name}</TableCell>
+                            <TableCell>{ownership.department}</TableCell>
+                          </TableRow>
                         )
                       })}
+                        </TableBody>
+                      </Table>
                     </div>
                   ) : (
                     <div className="rounded-3xl border border-dashed bg-muted/20 px-4 py-10 text-center">
