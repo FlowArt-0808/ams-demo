@@ -3,7 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { useState } from "react"
-import { ArrowLeft, CheckCircle2, Clock3 } from "lucide-react"
+import { ArrowLeft, BellRing, CheckCircle2, Clock3, FileSignature } from "lucide-react"
 
 import { AssetStatusBadge } from "@/components/demo/asset-status-badge"
 import { Badge } from "@/components/ui/badge"
@@ -47,12 +47,17 @@ export function EmployeeAssetPage({
   asset: Asset
   owner: Employee | null
 }) {
-  const [assignedToSelf, setAssignedToSelf] = useState(false)
   const historyEvents = getAssetHistory(asset.id)
-  const holderName = assignedToSelf ? "You" : owner?.name ?? "In storage"
-  const holderDepartment = assignedToSelf ? "Pending confirmation" : owner?.department ?? "Storage"
-  const holderContact = assignedToSelf ? "Waiting for internal confirmation" : owner?.email ?? "Storage Team"
-  const employeeAssets = assignedToSelf ? [asset] : owner ? getAssetsForEmployee(owner.id) : []
+  const holderName = owner?.name ?? "In storage"
+  const holderDepartment = owner?.department ?? "Storage"
+  const holderContact = owner?.email ?? "Storage Team"
+  const employeeAssets = owner ? getAssetsForEmployee(owner.id) : []
+  const hasReturnNotification =
+    asset.status === "PENDING_RETRIEVAL" || asset.status === "OVERDUE_RETRIEVAL"
+  const assignedAssetSummary =
+    employeeAssets.length > 0
+      ? employeeAssets.map((ownedAsset) => `${ownedAsset.name} (${ownedAsset.id})`).join(", ")
+      : `${asset.name} (${asset.id})`
 
   return (
     <div className="min-h-svh bg-background">
@@ -133,22 +138,85 @@ export function EmployeeAssetPage({
                 </div>
               </div>
 
-              <Button
-                className="w-full rounded-xl"
-                onClick={() => setAssignedToSelf(true)}
-                disabled={assignedToSelf}
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                Claim as Owner
-              </Button>
             </CardContent>
           </Card>
 
-          <Card className="min-w-0 rounded-[20px] border shadow-none">
-            <CardHeader className="border-b pb-4">
-              <CardTitle className="text-base">Asset Item</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6 pt-5">
+          <div className="min-w-0 space-y-4">
+            {hasReturnNotification ? (
+              <Card
+                className={
+                  asset.status === "OVERDUE_RETRIEVAL"
+                    ? "rounded-[20px] border-red-200 bg-red-500/5 shadow-none"
+                    : "rounded-[20px] border-orange-200 bg-orange-500/5 shadow-none"
+                }
+              >
+                <CardContent className="flex flex-col gap-4 pt-5 md:flex-row md:items-center md:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={
+                        asset.status === "OVERDUE_RETRIEVAL"
+                          ? "flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10"
+                          : "flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10"
+                      }
+                    >
+                      <BellRing
+                        className={
+                          asset.status === "OVERDUE_RETRIEVAL"
+                            ? "h-5 w-5 text-red-700"
+                            : "h-5 w-5 text-orange-700"
+                        }
+                      />
+                    </div>
+                    <div>
+                      <p
+                        className={
+                          asset.status === "OVERDUE_RETRIEVAL"
+                            ? "text-xs font-medium uppercase tracking-[0.16em] text-red-700"
+                            : "text-xs font-medium uppercase tracking-[0.16em] text-orange-700"
+                        }
+                      >
+                        Notification
+                      </p>
+                      <p className="font-medium">Return your assigned asset</p>
+                      <p className="text-sm text-muted-foreground">
+                        {asset.status === "OVERDUE_RETRIEVAL"
+                          ? `Your return is overdue. Please return these assigned assets to HR immediately: ${assignedAssetSummary}.`
+                          : `Please return your assigned assets to HR: ${assignedAssetSummary}.`}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="rounded-full">
+                    {asset.status === "OVERDUE_RETRIEVAL" ? "Action overdue" : "Action required"}
+                  </Badge>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            <Card className="rounded-[20px] border-blue-200 bg-blue-500/5 shadow-none">
+              <CardContent className="flex flex-col gap-4 pt-5 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10">
+                    <FileSignature className="h-5 w-5 text-blue-700" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-700">Step 2</p>
+                    <p className="font-medium">Received this asset from a new handoff?</p>
+                    <p className="text-sm text-muted-foreground">
+                      After scanning the QR, the next step is asset acknowledgment so HR can record that you accepted the device.
+                    </p>
+                  </div>
+                </div>
+                <Button asChild className="rounded-xl">
+                  <Link href="/employee/acknowledge">Open Asset Acknowledgment</Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-[20px] border shadow-none">
+              <CardHeader className="border-b pb-4">
+                <CardTitle className="text-base">Asset Item</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6 pt-5">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -189,12 +257,6 @@ export function EmployeeAssetPage({
                   <p className="text-sm text-muted-foreground">{asset.location}</p>
                 </div>
               </div>
-
-              {assignedToSelf ? (
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-500/10 p-4 text-sm text-emerald-900">
-                  This asset is now marked as claimed by you in the demo flow.
-                </div>
-              ) : null}
 
               <div className="space-y-2">
                 <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -252,8 +314,9 @@ export function EmployeeAssetPage({
                   )}
                 </div>
               </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </main>
     </div>

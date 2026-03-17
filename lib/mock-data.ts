@@ -2,7 +2,13 @@
 
 export type AssetCategory = "Laptop" | "Monitor" | "Phone" | "Tablet" | "Other"
 export type AssetCondition = "Good" | "Fair" | "Damaged"
-export type AssetStatus = "AVAILABLE" | "ASSIGNED" | "IN_REPAIR" | "PENDING_DISPOSAL"
+export type AssetStatus =
+  | "AVAILABLE"
+  | "ASSIGNED"
+  | "PENDING_RETRIEVAL"
+  | "OVERDUE_RETRIEVAL"
+  | "IN_REPAIR"
+  | "PENDING_DISPOSAL"
 
 export interface Employee {
   id: string
@@ -69,6 +75,8 @@ export interface CensusTask {
 export const assetStatusLabels: Record<AssetStatus, string> = {
   AVAILABLE: "Available",
   ASSIGNED: "Assigned",
+  PENDING_RETRIEVAL: "Pending Retrieval",
+  OVERDUE_RETRIEVAL: "Overdue Retrieval",
   IN_REPAIR: "In Repair",
   PENDING_DISPOSAL: "Pending Disposal",
 }
@@ -76,6 +84,8 @@ export const assetStatusLabels: Record<AssetStatus, string> = {
 export const assetStatuses: AssetStatus[] = [
   "AVAILABLE",
   "ASSIGNED",
+  "PENDING_RETRIEVAL",
+  "OVERDUE_RETRIEVAL",
   "IN_REPAIR",
   "PENDING_DISPOSAL",
 ]
@@ -300,7 +310,7 @@ export const mockAssets: Asset[] = [
     assignedTo: "EMP-003",
     location: "HQ - Floor 1",
     condition: "Good",
-    status: "ASSIGNED",
+    status: "PENDING_RETRIEVAL",
     verified: true,
     verifiedAt: "2026-03-10T14:30:00Z",
     serialNumber: "FK2ZJ91QM8Y4",

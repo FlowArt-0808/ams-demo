@@ -33,8 +33,10 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -69,6 +71,7 @@ import {
   departments,
   getAllAssets,
   getAssignedAssetCount,
+  getAssetHistory,
   getEmployeeById,
   mockCensuses,
   type Asset,
@@ -341,6 +344,8 @@ export function StorageWorkspace() {
   const [selectedOwnership, setSelectedOwnership] = useState("all")
   const [selectedCondition, setSelectedCondition] = useState("all")
   const [selectedStatus, setSelectedStatus] = useState<ExtendedAssetStatus | "all">("all")
+  const [selectedLocation, setSelectedLocation] = useState("all")
+  const [selectedHolder, setSelectedHolder] = useState("all")
   const [selectedDate, setSelectedDate] = useState("all")
   const [selectedDepartment, setSelectedDepartment] = useState("all")
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([])
@@ -349,6 +354,7 @@ export function StorageWorkspace() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
   const [selectedAssetId, setSelectedAssetId] = useState("MAC-2026-001")
+  const [qrAssetQuery, setQrAssetQuery] = useState("")
   const [archivedAssetIds, setArchivedAssetIds] = useState<string[]>([])
   const [origin, setOrigin] = useState("")
   const [qrDataUrl, setQrDataUrl] = useState("")
@@ -360,6 +366,18 @@ export function StorageWorkspace() {
 
   const allAssets = getAllAssets().filter((asset) => !archivedAssetIds.includes(asset.id))
   const selectedAsset = allAssets.find((asset) => asset.id === selectedAssetId) ?? allAssets[0]
+  const selectedAssetHistory = selectedAsset ? getAssetHistory(selectedAsset.id).slice(0, 3) : []
+  const qrAssetSuggestions = allAssets.filter((asset) => {
+    const query = qrAssetQuery.trim().toLowerCase()
+
+    if (!query) {
+      return true
+    }
+
+    return `${asset.id} ${asset.name} ${asset.category} ${asset.location}`
+      .toLowerCase()
+      .includes(query)
+  })
   const employeeHref = selectedAsset ? `/employee/assets/${selectedAsset.id}` : ""
   const employeeUrl =
     origin && employeeHref ? new URL(employeeHref, origin).toString() : employeeHref
@@ -409,6 +427,8 @@ export function StorageWorkspace() {
     const matchesCondition =
       selectedCondition === "all" || getEffectiveCondition(asset) === selectedCondition
     const matchesStatus = selectedStatus === "all" || effectiveStatus === selectedStatus
+    const matchesLocation = selectedLocation === "all" || asset.location === selectedLocation
+    const matchesHolder = selectedHolder === "all" || ownership.name === selectedHolder
     const matchesDate =
       selectedDate === "all" || new Date(asset.purchaseDate).getFullYear().toString() === selectedDate
     const matchesDepartment =
@@ -421,6 +441,8 @@ export function StorageWorkspace() {
       matchesOwnership &&
       matchesCondition &&
       matchesStatus &&
+      matchesLocation &&
+      matchesHolder &&
       matchesDate &&
       matchesDepartment
     )
@@ -482,7 +504,10 @@ export function StorageWorkspace() {
   const storageCount = allAssets.filter((asset) => !asset.assignedTo).length
   const flaggedCount = allAssets.filter(
     (asset) =>
-      getEffectiveStatus(asset) === "IN_REPAIR" || getEffectiveStatus(asset) === "PENDING_DISPOSAL",
+      getEffectiveStatus(asset) === "PENDING_RETRIEVAL" ||
+      getEffectiveStatus(asset) === "OVERDUE_RETRIEVAL" ||
+      getEffectiveStatus(asset) === "IN_REPAIR" ||
+      getEffectiveStatus(asset) === "PENDING_DISPOSAL",
   ).length
   const canArchiveAssets = role === "inventory-head" || role === "system-admin"
   const storageCensusSessions = [...mockCensuses, ...storageHistoricalCensuses].sort(
@@ -505,7 +530,10 @@ export function StorageWorkspace() {
   )
   const discrepancyAssets = allAssets.filter(
     (asset) =>
-      getEffectiveStatus(asset) === "IN_REPAIR" || getEffectiveStatus(asset) === "PENDING_DISPOSAL",
+      getEffectiveStatus(asset) === "PENDING_RETRIEVAL" ||
+      getEffectiveStatus(asset) === "OVERDUE_RETRIEVAL" ||
+      getEffectiveStatus(asset) === "IN_REPAIR" ||
+      getEffectiveStatus(asset) === "PENDING_DISPOSAL",
   )
   const selectedCensusProgress = selectedCensus
     ? Math.round((selectedCensus.verifiedAssets / selectedCensus.totalAssets) * 100)
@@ -532,7 +560,10 @@ export function StorageWorkspace() {
       assigned: assets.filter((asset) => Boolean(asset.assignedTo)).length,
       flagged: assets.filter(
         (asset) =>
-          getEffectiveStatus(asset) === "IN_REPAIR" || getEffectiveStatus(asset) === "PENDING_DISPOSAL",
+          getEffectiveStatus(asset) === "PENDING_RETRIEVAL" ||
+          getEffectiveStatus(asset) === "OVERDUE_RETRIEVAL" ||
+          getEffectiveStatus(asset) === "IN_REPAIR" ||
+          getEffectiveStatus(asset) === "PENDING_DISPOSAL",
       ).length,
     }
   })
@@ -551,7 +582,10 @@ export function StorageWorkspace() {
       assigned: assets.filter((asset) => Boolean(asset.assignedTo)).length,
       flagged: assets.filter(
         (asset) =>
-          getEffectiveStatus(asset) === "IN_REPAIR" || getEffectiveStatus(asset) === "PENDING_DISPOSAL",
+          getEffectiveStatus(asset) === "PENDING_RETRIEVAL" ||
+          getEffectiveStatus(asset) === "OVERDUE_RETRIEVAL" ||
+          getEffectiveStatus(asset) === "IN_REPAIR" ||
+          getEffectiveStatus(asset) === "PENDING_DISPOSAL",
       ).length,
     }
   })
@@ -561,50 +595,37 @@ export function StorageWorkspace() {
     selectedOwnership !== "all",
     selectedCondition !== "all",
     selectedStatus !== "all",
+    selectedLocation !== "all",
+    selectedHolder !== "all",
     selectedDate !== "all",
     selectedDepartment !== "all",
   ].filter(Boolean).length
   const purchaseYears = Array.from(
     new Set(allAssets.map((asset) => new Date(asset.purchaseDate).getFullYear().toString())),
   ).sort((left, right) => Number(right) - Number(left))
+  const categoryMenuOptions = assetCategories.filter((category) =>
+    selectedStorageGroup ? selectedStorageGroup.types.includes(category) : true,
+  )
+  const locationMenuOptions = Array.from(new Set(allAssets.map((asset) => asset.location))).sort(
+    (left, right) => left.localeCompare(right),
+  )
+  const holderMenuOptions = Array.from(
+    new Set(allAssets.map((asset) => getOwnershipLabel(asset).name)),
+  ).sort((left, right) => left.localeCompare(right))
 
   useEffect(() => {
     setOrigin(window.location.origin)
   }, [])
 
   useEffect(() => {
-    if (!selectedAsset || !employeeUrl) {
-      setQrDataUrl("")
-      return
+    if (selectedAsset) {
+      setQrAssetQuery(`${selectedAsset.id} | ${selectedAsset.name}`)
     }
+  }, [selectedAsset?.id])
 
-    let cancelled = false
-
-    QRCode.toDataURL(employeeUrl, {
-      width: 320,
-      margin: 2,
-      errorCorrectionLevel: "M",
-      color: {
-        dark: "#111827",
-        light: "#FFFFFF",
-      },
-    })
-      .then((dataUrl: string) => {
-        if (!cancelled) {
-          setQrDataUrl(dataUrl)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setQrDataUrl("")
-          toast.error("Unable to generate the QR code label.")
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [employeeUrl, selectedAsset?.id])
+  useEffect(() => {
+    setQrDataUrl("")
+  }, [selectedAsset?.id])
 
   useEffect(() => {
     if (activeTab !== "census" && activeCensusView !== "overview") {
@@ -677,11 +698,37 @@ export function StorageWorkspace() {
     }
   }
 
+  const handleGenerateQrCode = async () => {
+    if (!selectedAsset || !employeeUrl) {
+      toast.error("Choose an asset first.")
+      return
+    }
+
+    try {
+      const dataUrl = await QRCode.toDataURL(employeeUrl, {
+        width: 320,
+        margin: 2,
+        errorCorrectionLevel: "M",
+        color: {
+          dark: "#111827",
+          light: "#FFFFFF",
+        },
+      })
+
+      setQrDataUrl(dataUrl)
+    } catch {
+      setQrDataUrl("")
+      toast.error("Unable to generate the QR code label.")
+    }
+  }
+
   const resetFilters = () => {
     setSearchQuery("")
     setSelectedOwnership("all")
     setSelectedCondition("all")
     setSelectedStatus("all")
+    setSelectedLocation("all")
+    setSelectedHolder("all")
     setSelectedDate("all")
     setSelectedDepartment("all")
   }
@@ -707,6 +754,74 @@ export function StorageWorkspace() {
     setSortKey(key)
     setSortDirection(key === "purchaseDate" || key === "purchaseCost" ? "desc" : "asc")
   }
+
+  const applySort = (key: AssetSortKey, direction: "asc" | "desc") => {
+    setSortKey(key)
+    setSortDirection(direction)
+  }
+
+  const renderHeaderDropdown = ({
+    label,
+    columnKey,
+    menuLabel,
+    selectedValue,
+    allLabel,
+    onClear,
+    onSortAsc,
+    onSortDesc,
+    options,
+  }: {
+    label: string
+    columnKey: AssetSortKey
+    menuLabel: string
+    selectedValue: string
+    allLabel: string
+    onClear: () => void
+    onSortAsc: () => void
+    onSortDesc: () => void
+    options: Array<{
+      checked: boolean
+      label: string
+      onSelect: () => void
+    }>
+  }) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="h-auto gap-1 px-0 font-medium">
+          {label}
+          <ArrowUpDown className="h-3.5 w-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-52">
+        <DropdownMenuLabel>{label}</DropdownMenuLabel>
+        <DropdownMenuItem onClick={onSortAsc}>
+          Sort ascending
+          {sortKey === columnKey && sortDirection === "asc" ? " • active" : ""}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onSortDesc}>
+          Sort descending
+          {sortKey === columnKey && sortDirection === "desc" ? " • active" : ""}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>{menuLabel}</DropdownMenuLabel>
+        <DropdownMenuCheckboxItem
+          checked={selectedValue === "all"}
+          onCheckedChange={() => onClear()}
+        >
+          {allLabel}
+        </DropdownMenuCheckboxItem>
+        {options.map((option) => (
+          <DropdownMenuCheckboxItem
+            key={option.label}
+            checked={option.checked}
+            onCheckedChange={() => option.onSelect()}
+          >
+            {option.label}
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 
   return (
     <div className="space-y-6">
@@ -1062,34 +1177,91 @@ export function StorageWorkspace() {
                           </Button>
                         </TableHead>
                         <TableHead>
-                          <Button variant="ghost" className="h-auto px-0 font-medium" onClick={() => toggleSort("category")}>
-                            Category
-                            <ArrowUpDown className="h-3.5 w-3.5" />
-                          </Button>
+                          {renderHeaderDropdown({
+                            label: "Category",
+                            columnKey: "category",
+                            menuLabel: "Filter category",
+                            selectedValue: selectedCategory,
+                            allLabel: "All categories",
+                            onClear: () => setSelectedCategory("all"),
+                            onSortAsc: () => applySort("category", "asc"),
+                            onSortDesc: () => applySort("category", "desc"),
+                            options: categoryMenuOptions.map((category) => ({
+                              checked: selectedCategory === category,
+                              label: category,
+                              onSelect: () => setSelectedCategory(category),
+                            })),
+                          })}
                         </TableHead>
                         <TableHead>
-                          <Button variant="ghost" className="h-auto px-0 font-medium" onClick={() => toggleSort("location")}>
-                            Location
-                            <ArrowUpDown className="h-3.5 w-3.5" />
-                          </Button>
+                          {renderHeaderDropdown({
+                            label: "Location",
+                            columnKey: "location",
+                            menuLabel: "Filter location",
+                            selectedValue: selectedLocation,
+                            allLabel: "All locations",
+                            onClear: () => setSelectedLocation("all"),
+                            onSortAsc: () => applySort("location", "asc"),
+                            onSortDesc: () => applySort("location", "desc"),
+                            options: locationMenuOptions.map((location) => ({
+                              checked: selectedLocation === location,
+                              label: location,
+                              onSelect: () => setSelectedLocation(location),
+                            })),
+                          })}
                         </TableHead>
                         <TableHead>
-                          <Button variant="ghost" className="h-auto px-0 font-medium" onClick={() => toggleSort("condition")}>
-                            Condition
-                            <ArrowUpDown className="h-3.5 w-3.5" />
-                          </Button>
+                          {renderHeaderDropdown({
+                            label: "Condition",
+                            columnKey: "condition",
+                            menuLabel: "Filter condition",
+                            selectedValue: selectedCondition,
+                            allLabel: "All conditions",
+                            onClear: () => setSelectedCondition("all"),
+                            onSortAsc: () => applySort("condition", "asc"),
+                            onSortDesc: () => applySort("condition", "desc"),
+                            options: conditionOptions
+                              .filter((option) => option.id !== "all")
+                              .map((option) => ({
+                                checked: selectedCondition === option.id,
+                                label: option.label,
+                                onSelect: () => setSelectedCondition(option.id),
+                              })),
+                          })}
                         </TableHead>
                         <TableHead>
-                          <Button variant="ghost" className="h-auto px-0 font-medium" onClick={() => toggleSort("status")}>
-                            Status
-                            <ArrowUpDown className="h-3.5 w-3.5" />
-                          </Button>
+                          {renderHeaderDropdown({
+                            label: "Status",
+                            columnKey: "status",
+                            menuLabel: "Filter status",
+                            selectedValue: selectedStatus,
+                            allLabel: "All statuses",
+                            onClear: () => setSelectedStatus("all"),
+                            onSortAsc: () => applySort("status", "asc"),
+                            onSortDesc: () => applySort("status", "desc"),
+                            options: Object.entries(extendedStatusLabels).map(([value, text]) => ({
+                              checked: selectedStatus === value,
+                              label: text,
+                              onSelect: () => setSelectedStatus(value as ExtendedAssetStatus),
+                            })),
+                          })}
                         </TableHead>
                         <TableHead>
-                          <Button variant="ghost" className="h-auto px-0 font-medium" onClick={() => toggleSort("holder")}>
-                            Holder
-                            <ArrowUpDown className="h-3.5 w-3.5" />
-                          </Button>
+                          {renderHeaderDropdown({
+                            label: "Holder",
+                            columnKey: "holder",
+                            menuLabel: "Filter holder",
+                            selectedValue: selectedHolder,
+                            allLabel: "All holders",
+                            onClear: () => setSelectedHolder("all"),
+                            onSortAsc: () => applySort("holder", "asc"),
+                            onSortDesc: () => applySort("holder", "desc"),
+                            options: holderMenuOptions.map((holder) => ({
+                              checked: selectedHolder === holder,
+                              label: holder,
+                              onSelect: () => setSelectedHolder(holder),
+                            })),
+                          })}
                         </TableHead>
                         <TableHead className="text-right">
                           <Button variant="ghost" className="h-auto px-0 font-medium" onClick={() => toggleSort("purchaseCost")}>
@@ -1616,75 +1788,155 @@ export function StorageWorkspace() {
         <TabsContent value="create-qr-code" className="space-y-4">
           <Card className="rounded-[28px] border-0 shadow-sm">
             <CardHeader>
-              <CardTitle>Create an employee QR label</CardTitle>
+              <CardTitle>Create a QR label</CardTitle>
               <CardDescription>
-                Each QR code points to an employee-facing page. Authorized roles can still use the
-                internal asset detail record separately.
+                Generate a QR code for an asset and open the linked asset page when needed.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
               <div className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-[1.4fr,0.6fr]">
                   <div className="space-y-2">
-                    <p className="text-sm font-medium">Choose asset</p>
-                    <Select
-                      value={selectedAsset?.id ?? ""}
-                      onValueChange={(value) => setSelectedAssetId(value)}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select an asset" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {allAssets.map((asset) => (
-                          <SelectItem key={asset.id} value={asset.id}>
-                            {asset.id} | {asset.name}
-                          </SelectItem>
+                    <p className="text-sm font-medium">Select asset</p>
+                    <div className="rounded-2xl border bg-background">
+                      <div className="relative border-b">
+                        <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          value={qrAssetQuery}
+                          onChange={(event) => setQrAssetQuery(event.target.value)}
+                          placeholder="Type asset ID or name..."
+                          className="border-0 pl-10 shadow-none focus-visible:ring-0"
+                        />
+                      </div>
+                      <div className="max-h-52 overflow-y-auto p-2">
+                        {qrAssetSuggestions.slice(0, 8).map((asset) => (
+                          <button
+                            key={asset.id}
+                            type="button"
+                            className={`flex w-full items-start justify-between rounded-xl px-3 py-2 text-left transition-colors hover:bg-muted ${
+                              selectedAsset?.id === asset.id ? "bg-muted" : ""
+                            }`}
+                            onClick={() => {
+                              setSelectedAssetId(asset.id)
+                              setQrAssetQuery(`${asset.id} | ${asset.name}`)
+                            }}
+                          >
+                            <div className="min-w-0">
+                              <p className="font-medium">{asset.id}</p>
+                              <p className="truncate text-sm text-muted-foreground">{asset.name}</p>
+                            </div>
+                            <Badge variant="outline" className="ml-3">{asset.category}</Badge>
+                          </button>
                         ))}
-                      </SelectContent>
-                    </Select>
+                        {qrAssetSuggestions.length === 0 ? (
+                          <div className="px-3 py-6 text-sm text-muted-foreground">
+                            No assets match that search.
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
-                    <p className="text-sm font-medium">Employee page</p>
+                    <p className="text-sm font-medium">Linked page</p>
                     <Button asChild variant="outline" className="w-full justify-start rounded-xl">
                       <Link href={employeeHref}>
                         <Link2 className="h-4 w-4" />
-                        Open page
+                        Open linked page
                       </Link>
                     </Button>
                   </div>
                 </div>
 
                 {selectedAsset && (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Card className="rounded-3xl border-dashed">
-                      <CardContent className="space-y-3 pt-6">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm text-muted-foreground">Selected asset</p>
-                            <p className="text-lg font-semibold">{selectedAsset.id}</p>
+                  <div className="grid gap-4">
+                    <Card className="overflow-hidden rounded-3xl border-dashed">
+                      <CardContent className="p-0">
+                        <div className="grid gap-0 lg:grid-cols-[220px_minmax(0,1fr)]">
+                          <div className="relative min-h-[220px] bg-muted/20">
+                            <Image
+                              src="/placeholder.jpg"
+                              alt={`${selectedAsset.name} asset image`}
+                              fill
+                              className="object-cover"
+                            />
                           </div>
-                          <AssetStatusBadge status={selectedAsset.status} />
+                          <div className="space-y-5 p-6">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm text-muted-foreground">Selected asset</p>
+                                <p className="text-xl font-semibold">{selectedAsset.name}</p>
+                                <p className="text-sm text-muted-foreground">{selectedAsset.id}</p>
+                              </div>
+                              <AssetStatusBadge status={selectedAsset.status} />
+                            </div>
+
+                            <p className="text-sm text-muted-foreground">{selectedAsset.description}</p>
+
+                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                              <div className="rounded-2xl border bg-background p-4">
+                                <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Type</p>
+                                <p className="mt-2 font-medium">{selectedAsset.category}</p>
+                              </div>
+                              <div className="rounded-2xl border bg-background p-4">
+                                <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Category</p>
+                                <p className="mt-2 font-medium">IT Equipment</p>
+                              </div>
+                              <div className="rounded-2xl border bg-background p-4">
+                                <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Condition</p>
+                                <p className="mt-2 font-medium">{selectedAsset.condition}</p>
+                              </div>
+                            </div>
+
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <div className="rounded-2xl border bg-background p-4">
+                                <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Owner</p>
+                                <p className="mt-2 font-medium">{getOwnershipLabel(selectedAsset).name}</p>
+                                <p className="text-sm text-muted-foreground">{getOwnershipLabel(selectedAsset).department}</p>
+                              </div>
+                              <div className="rounded-2xl border bg-background p-4">
+                                <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Location</p>
+                                <p className="mt-2 font-medium">{selectedAsset.location}</p>
+                                <p className="text-sm text-muted-foreground">{currencyFormatter.format(selectedAsset.purchaseCost)}</p>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <p className="text-sm font-medium">{selectedAsset.name}</p>
-                        <p className="text-sm text-muted-foreground">{selectedAsset.description}</p>
                       </CardContent>
                     </Card>
 
                     <Card className="rounded-3xl border-dashed">
-                      <CardContent className="space-y-3 pt-6">
-                        <DetailRow label="Owner" value={getOwnershipLabel(selectedAsset).name} />
-                        <DetailRow label="Location" value={selectedAsset.location} />
-                        <DetailRow
-                          label="Cost"
-                          value={currencyFormatter.format(selectedAsset.purchaseCost)}
-                        />
+                      <CardHeader>
+                        <CardTitle className="text-base">Recent history</CardTitle>
+                        <CardDescription>Latest movement and ownership events for this asset.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {selectedAssetHistory.map((event) => (
+                          <div key={event.id} className="rounded-2xl border bg-background p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="font-medium">{event.title}</p>
+                                <p className="text-xs text-muted-foreground">{new Date(event.date).toLocaleDateString()}</p>
+                              </div>
+                              <Badge variant="outline">{event.ownerLabel}</Badge>
+                            </div>
+                            <p className="mt-2 text-sm text-muted-foreground">{event.description}</p>
+                            <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                              <Badge variant="outline">{event.location}</Badge>
+                              <Badge variant="outline">{event.condition}</Badge>
+                            </div>
+                          </div>
+                        ))}
                       </CardContent>
                     </Card>
                   </div>
                 )}
 
                 <div className="flex flex-wrap gap-3">
+                  <Button onClick={handleGenerateQrCode} className="rounded-xl">
+                    <QrCode className="h-4 w-4" />
+                    Generate a QR Code
+                  </Button>
                   <Button onClick={handleCopyEmployeeLink} className="rounded-xl">
                     <Link2 className="h-4 w-4" />
                     Copy employee link
@@ -1718,7 +1970,7 @@ export function StorageWorkspace() {
                     </div>
                     <div>
                       <CardTitle className="text-lg">QR label preview</CardTitle>
-                      <CardDescription>Scans to the employee-facing asset page.</CardDescription>
+                      <CardDescription>Scans to the linked asset page.</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
@@ -1733,22 +1985,26 @@ export function StorageWorkspace() {
                         />
                       ) : (
                         <div className="flex h-[220px] w-[220px] items-center justify-center rounded-3xl border border-dashed text-sm text-muted-foreground">
-                          QR preview loading
+                          Generate a QR code
                         </div>
                       )}
-                      <div>
-                        <p className="font-semibold">{selectedAsset?.id}</p>
-                        <p className="text-sm text-muted-foreground">{selectedAsset?.name}</p>
-                      </div>
+                      {qrDataUrl ? (
+                        <div>
+                          <p className="font-semibold">{selectedAsset?.id}</p>
+                          <p className="text-sm text-muted-foreground">{selectedAsset?.name}</p>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-dashed bg-background p-4">
-                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                      Encoded destination
-                    </p>
-                    <p className="mt-2 break-all text-sm font-medium">{employeeUrl || employeeHref}</p>
-                  </div>
+                  {qrDataUrl ? (
+                    <div className="rounded-2xl border border-dashed bg-background p-4">
+                      <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                        Encoded destination
+                      </p>
+                      <p className="mt-2 break-all text-sm font-medium">{employeeUrl || employeeHref}</p>
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
             </CardContent>

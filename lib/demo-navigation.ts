@@ -7,7 +7,7 @@ export type DemoRole =
   | "it-admin"
   | "system-admin"
 
-export type DemoWorkflow = "qr" | "distribution" | "issues" | "dispose"
+export type DemoWorkflow = "qr" | "distribution" | "issues" | "dispose" | "terminate"
 
 const storageDetailRoles: DemoRole[] = [
   "inventory-head",
@@ -19,11 +19,13 @@ const storageDetailRoles: DemoRole[] = [
 
 export type DemoMenuId =
   | "home"
+  | "notifications"
   | "order"
   | "receive"
   | "storage"
   | "distribution"
   | "distribution-workflow"
+  | "terminate-workflow"
   | "issues-workflow"
   | "dispose-workflow"
   | "missing-broken"
@@ -41,6 +43,9 @@ export type DemoScreenId =
   | "it-distribution"
   | "employee-request"
   | "employee-acknowledge"
+  | "higher-ups-terminate"
+  | "hr-termination-recovery"
+  | "employee-return-notice"
   | "issue-queue"
   | "it-issue-triage"
   | "dispose-queue"
@@ -136,6 +141,14 @@ export const demoMenus: DemoMenuConfig[] = [
     },
   },
   {
+    id: "notifications",
+    label: "Notifications",
+    description: "View employee alerts such as return requests and action-required messages.",
+    href: "/employee/assets/IPH-2025-008?notice=return",
+    section: "main",
+    roles: ["employee", "system-admin"],
+  },
+  {
     id: "order",
     label: "Order",
     description: "Create, approve, and confirm purchase orders.",
@@ -210,6 +223,14 @@ export const demoMenus: DemoMenuConfig[] = [
     roles: demoRoles.map((role) => role.id),
   },
   {
+    id: "terminate-workflow",
+    label: "Terminate Employee Workflow",
+    description: "Role-based walkthrough for termination approval, retrieval notification, and return follow-up.",
+    href: "/?workflow=terminate",
+    section: "workflow",
+    roles: demoRoles.map((role) => role.id),
+  },
+  {
     id: "issues-workflow",
     label: "Missing/Broken Workflow",
     description: "Role-based walkthrough for incident triage and asset recovery work.",
@@ -232,10 +253,10 @@ export const demoScreens: DemoScreenConfig[] = [
     id: "hr-census",
     workflow: "qr",
     ownerRole: "hr",
-    label: "Census Management",
+    label: "Step 1: HR Starts Census",
     href: "/hr/census",
     description:
-      "Create census periods, scope the audit, and track verification progress.",
+      "HR starts the census and defines which assets need to be verified.",
     badge: "Step 1",
     roles: ["hr", "inventory-head", "system-admin"],
   },
@@ -243,10 +264,10 @@ export const demoScreens: DemoScreenConfig[] = [
     id: "auditor-scan",
     workflow: "qr",
     ownerRole: "inventory-head",
-    label: "Audit Management",
+    label: "Step 2: Auditor Scans QR",
     href: "/auditor/scan",
     description:
-      "Walk through locations, scan QR codes, and record audit verification details.",
+      "The auditor scans QR codes and records verification details.",
     badge: "Step 2",
     roles: ["inventory-head", "system-admin"],
   },
@@ -254,10 +275,10 @@ export const demoScreens: DemoScreenConfig[] = [
     id: "employee-assets",
     workflow: "qr",
     ownerRole: "employee",
-    label: "When Employee Scans QR Code",
+    label: "Step 3: Employee Opens Asset Page",
     href: "/employee/assets/MAC-2026-001",
     description:
-      "Open the employee-facing asset page that a QR code resolves to.",
+      "The employee opens the QR-linked asset page and views the asset details.",
     badge: "Step 3",
     roles: ["employee", "system-admin"],
   },
@@ -265,52 +286,85 @@ export const demoScreens: DemoScreenConfig[] = [
     id: "hr-distribution",
     workflow: "distribution",
     ownerRole: "hr",
-    label: "Distribution Dashboard",
+    label: "Step 1: HR Reviews Requests",
     href: "/hr/distribution",
     description:
-      "Assign assets, review requests, and track outbound assignment activity.",
-    badge: "HR",
-    roles: ["hr", "it-admin", "system-admin"],
+      "HR reviews requests and starts the asset assignment flow.",
+    badge: "Step 1",
+    roles: ["higher-ups", "hr", "it-admin", "system-admin"],
   },
   {
     id: "it-distribution",
     workflow: "distribution",
     ownerRole: "it-admin",
-    label: "IT Readiness",
+    label: "Step 2: IT Prepares Assets",
     href: "/hr/distribution",
     description:
-      "Review pending acknowledgments, coordinate device prep, and follow the outbound handoff.",
-    badge: "IT",
+      "IT reviews readiness, prepares devices, and tracks handoff progress.",
+    badge: "Step 2",
     roles: ["it-admin", "system-admin"],
   },
   {
     id: "employee-request",
     workflow: "distribution",
     ownerRole: "employee",
-    label: "Asset Request",
+    label: "Step 3: Employee Requests Asset",
     href: "/employee/request",
-    description: "Submit a new asset request with a business justification.",
-    badge: "Employee",
+    description: "The employee submits an asset request with business justification.",
+    badge: "Step 3",
     roles: ["employee", "system-admin"],
   },
   {
     id: "employee-acknowledge",
     workflow: "distribution",
     ownerRole: "employee",
-    label: "Acknowledgment",
+    label: "Step 4: Employee Acknowledges Receipt",
     href: "/employee/acknowledge",
-    description: "Acknowledge receipt of an assigned asset electronically.",
-    badge: "Employee",
+    description: "The employee confirms receipt of the assigned asset electronically.",
+    badge: "Step 4",
     roles: ["employee", "system-admin"],
+  },
+  {
+    id: "higher-ups-terminate",
+    workflow: "terminate",
+    ownerRole: "higher-ups",
+    label: "Step 1: Higher-Up Submits Termination",
+    href: "/hr/distribution?startTermination=1",
+    description:
+      "A higher-up starts the offboarding flow.",
+    badge: "Step 1",
+    roles: ["higher-ups", "system-admin"],
+  },
+  {
+    id: "hr-termination-recovery",
+    workflow: "terminate",
+    ownerRole: "hr",
+    label: "Step 2: Notifications Sent to HR and Employee",
+    href: "/hr/distribution",
+    description:
+      "HR receives the retrieval notice and the employee receives the return notice at the same time.",
+    badge: "Step 2",
+    roles: ["hr", "system-admin"],
+  },
+  {
+    id: "employee-return-notice",
+    workflow: "terminate",
+    ownerRole: "hr",
+    label: "Step 3: Asset Retrieval Is Completed or Failed and Status Is Updated",
+    href: "/hr/distribution",
+    description:
+      "After retrieval succeeds or fails, the asset status is updated based on the outcome.",
+    badge: "Step 3",
+    roles: ["hr", "system-admin"],
   },
   {
     id: "issue-queue",
     workflow: "issues",
     ownerRole: "hr",
-    label: "Missing/Broken Queue",
+    label: "Step 1: Report Missing or Broken Asset",
     href: "/?view=missing-broken",
     description:
-      "Report incidents, monitor recovery work, and route damaged devices into technical review.",
+      "HR or operations reports the missing or broken asset case.",
     badge: "Step 1",
     roles: ["hr", "inventory-head", "it-admin", "system-admin"],
   },
@@ -318,10 +372,10 @@ export const demoScreens: DemoScreenConfig[] = [
     id: "it-issue-triage",
     workflow: "issues",
     ownerRole: "it-admin",
-    label: "Technical Triage",
+    label: "Step 2: IT Reviews and Triage",
     href: "/?view=missing-broken",
     description:
-      "Assess damaged assets, decide repair versus retirement, and push technical cases forward.",
+      "IT reviews the issue, decides next action, and moves the case forward.",
     badge: "Step 2",
     roles: ["it-admin", "system-admin"],
   },
@@ -329,10 +383,10 @@ export const demoScreens: DemoScreenConfig[] = [
     id: "dispose-queue",
     workflow: "dispose",
     ownerRole: "finance",
-    label: "Dispose Queue",
+    label: "Step 1: Finance Reviews Disposal",
     href: "/?view=dispose",
     description:
-      "Review write-offs, confirm wipe evidence, and complete the disposal archive flow.",
+      "Finance reviews the disposal request and confirms the write-off path.",
     badge: "Step 1",
     roles: ["finance", "hr", "it-admin", "system-admin"],
   },
@@ -340,11 +394,11 @@ export const demoScreens: DemoScreenConfig[] = [
     id: "it-dispose",
     workflow: "dispose",
     ownerRole: "it-admin",
-    label: "Wipe & Finalize",
+    label: "Step 2: IT Wipes and Finalizes",
     href: "/?view=dispose",
     description:
-      "Upload the wipe certificate, complete the operational checklist, and finish the disposal.",
-    badge: "IT",
+      "IT uploads wipe evidence and completes the final disposal steps.",
+    badge: "Step 2",
     roles: ["it-admin", "system-admin"],
   },
 ]
@@ -420,6 +474,10 @@ export function getActiveMenuId(
   pathname: string,
   searchParams: URLSearchParams,
 ): DemoMenuId {
+  if (pathname.startsWith("/employee/assets/") && searchParams.get("notice") === "return") {
+    return "notifications"
+  }
+
   if (pathname.startsWith("/storage/assets/")) {
     return "storage"
   }
@@ -431,6 +489,10 @@ export function getActiveMenuId(
   if (pathname === "/") {
     if (searchParams.get("workflow") === "distribution") {
       return "distribution-workflow"
+    }
+
+    if (searchParams.get("workflow") === "terminate") {
+      return "terminate-workflow"
     }
 
     if (searchParams.get("workflow") === "issues") {
@@ -517,6 +579,16 @@ export function getFallbackHref(role: DemoRole, pathname: string): string {
   ) {
     const workflowMenu = demoMenus.find(
       (menu) => menu.id === "distribution-workflow",
+    )
+
+    if (workflowMenu && workflowMenu.roles.includes(role)) {
+      return resolveMenuItem(workflowMenu, role).href
+    }
+  }
+
+  if (pathname === "/hr/distribution") {
+    const workflowMenu = demoMenus.find(
+      (menu) => menu.id === "terminate-workflow",
     )
 
     if (workflowMenu && workflowMenu.roles.includes(role)) {

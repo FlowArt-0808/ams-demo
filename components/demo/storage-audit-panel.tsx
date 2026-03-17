@@ -108,6 +108,8 @@ export function StorageAuditPanel({
                 <SelectContent>
                   <SelectItem value="AVAILABLE">Available</SelectItem>
                   <SelectItem value="ASSIGNED">Assigned</SelectItem>
+                  <SelectItem value="PENDING_RETRIEVAL">Pending Retrieval</SelectItem>
+                  <SelectItem value="OVERDUE_RETRIEVAL">Overdue Retrieval</SelectItem>
                   <SelectItem value="IN_REPAIR">In Repair</SelectItem>
                   <SelectItem value="PENDING_DISPOSAL">Pending Disposal</SelectItem>
                 </SelectContent>

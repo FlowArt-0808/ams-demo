@@ -5,6 +5,7 @@ import { useEffect } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
+  BellRing,
   Box,
   ChevronsUpDown,
   House,
@@ -15,6 +16,7 @@ import {
   ShoppingCart,
   Trash2,
   Truck,
+  Users,
   Warehouse,
 } from "lucide-react"
 
@@ -61,11 +63,13 @@ import { cn } from "@/lib/utils"
 
 const menuIcons: Record<DemoMenuId, typeof House> = {
   home: House,
+  notifications: BellRing,
   order: ShoppingCart,
   receive: Truck,
   storage: Warehouse,
   distribution: Package,
   "distribution-workflow": Package,
+  "terminate-workflow": Users,
   "issues-workflow": AlertTriangle,
   "dispose-workflow": Trash2,
   "missing-broken": AlertTriangle,
@@ -77,6 +81,7 @@ const menuIcons: Record<DemoMenuId, typeof House> = {
 const workflowRoleText: Partial<Record<DemoMenuId, string>> = {
   qr: "Roles: HR, Inventory Head, Employee",
   "distribution-workflow": "Roles: HR, IT Admin, Employee",
+  "terminate-workflow": "Roles: Higher-ups, HR, Employee",
   "issues-workflow": "Roles: HR, Inventory Head, IT Admin",
   "dispose-workflow": "Roles: HR, Finance, IT Admin",
 }
@@ -84,8 +89,10 @@ const workflowRoleText: Partial<Record<DemoMenuId, string>> = {
 const highlightedMenuIds = new Set<DemoMenuId>([
   "order",
   "storage",
+  "notifications",
   "qr",
   "distribution-workflow",
+  "terminate-workflow",
   "issues-workflow",
   "dispose-workflow",
 ])

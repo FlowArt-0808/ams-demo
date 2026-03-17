@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
   ArrowRight,
+  BellRing,
   Box,
   ClipboardList,
   FileSignature,
@@ -43,11 +44,13 @@ import {
 
 const menuIcons: Record<DemoMenuId, typeof House> = {
   home: House,
+  notifications: BellRing,
   order: ShoppingCart,
   receive: Truck,
   storage: Warehouse,
   distribution: Package,
   "distribution-workflow": Package,
+  "terminate-workflow": Users,
   "issues-workflow": AlertTriangle,
   "dispose-workflow": Trash2,
   "missing-broken": AlertTriangle,
@@ -64,6 +67,9 @@ const screenIcons: Record<DemoScreenId, typeof QrCode> = {
   "it-distribution": Settings,
   "employee-request": Package,
   "employee-acknowledge": FileSignature,
+  "higher-ups-terminate": Users,
+  "hr-termination-recovery": AlertTriangle,
+  "employee-return-notice": UserCheck,
   "issue-queue": AlertTriangle,
   "it-issue-triage": Settings,
   "dispose-queue": Trash2,
@@ -105,6 +111,18 @@ const screenStyles: Record<
     iconWrap: "bg-rose-500/10",
     icon: "text-rose-600",
   },
+  "higher-ups-terminate": {
+    iconWrap: "bg-indigo-500/10",
+    icon: "text-indigo-600",
+  },
+  "hr-termination-recovery": {
+    iconWrap: "bg-orange-500/10",
+    icon: "text-orange-600",
+  },
+  "employee-return-notice": {
+    iconWrap: "bg-amber-500/10",
+    icon: "text-amber-600",
+  },
   "issue-queue": {
     iconWrap: "bg-rose-500/10",
     icon: "text-rose-600",
@@ -134,6 +152,10 @@ const menuStyles: Record<
     iconWrap: "bg-zinc-500/10",
     icon: "text-zinc-700",
   },
+  notifications: {
+    iconWrap: "bg-amber-500/10",
+    icon: "text-amber-600",
+  },
   order: {
     iconWrap: "bg-sky-500/10",
     icon: "text-sky-600",
@@ -153,6 +175,10 @@ const menuStyles: Record<
   "distribution-workflow": {
     iconWrap: "bg-violet-500/10",
     icon: "text-violet-600",
+  },
+  "terminate-workflow": {
+    iconWrap: "bg-orange-500/10",
+    icon: "text-orange-600",
   },
   "issues-workflow": {
     iconWrap: "bg-rose-500/10",
@@ -227,6 +253,7 @@ const pendingTasks = [
 const workflowParticipants: Record<DemoWorkflow, string[]> = {
   qr: ["HR", "Inventory Head", "Employee"],
   distribution: ["HR", "IT Admin", "Employee"],
+  terminate: ["Higher-ups", "HR", "Employee"],
   issues: ["HR", "Inventory Head", "IT Admin"],
   dispose: ["HR", "Finance", "IT Admin"],
 }
@@ -576,9 +603,6 @@ function WorkflowOverview({
                           <Badge variant="secondary" className="text-xs">
                             {screen.badge}
                           </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            {ownerRole.label}
-                          </Badge>
                         </div>
                         <CardDescription>{screen.description}</CardDescription>
                       </div>
@@ -617,6 +641,8 @@ export default function HomePage() {
   const activeWorkflow =
     activeMenuId === "distribution-workflow"
       ? "distribution"
+      : activeMenuId === "terminate-workflow"
+        ? "terminate"
       : activeMenuId === "issues-workflow"
         ? "issues"
       : activeMenuId === "dispose-workflow"

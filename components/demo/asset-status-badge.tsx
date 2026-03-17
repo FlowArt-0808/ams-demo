@@ -7,6 +7,8 @@ type DisplayAssetStatus = AssetStatus | "MISSING" | "BROKEN"
 const statusClasses: Record<DisplayAssetStatus, string> = {
   AVAILABLE: "border-emerald-200 bg-emerald-500/10 text-emerald-700",
   ASSIGNED: "border-blue-200 bg-blue-500/10 text-blue-700",
+  PENDING_RETRIEVAL: "border-orange-200 bg-orange-500/10 text-orange-700",
+  OVERDUE_RETRIEVAL: "border-red-200 bg-red-500/10 text-red-700",
   IN_REPAIR: "border-amber-200 bg-amber-500/10 text-amber-700",
   PENDING_DISPOSAL: "border-rose-200 bg-rose-500/10 text-rose-700",
   MISSING: "border-orange-200 bg-orange-500/10 text-orange-700",
